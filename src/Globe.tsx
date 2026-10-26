@@ -5,6 +5,7 @@ import { Canvas, type ThreeEvent } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { flagPngUrl, loadWorld, mainBounds, type CountryProps, type World } from './countries';
 import { CountryCard, Tooltip, ZoomButtons, isTouch, type TipState } from './Tooltip';
+import { fingerRotateSpeed, mouseRotateSpeed } from './globeRotate';
 
 const TEX_W = 8192, TEX_H = 4096;
 
@@ -142,13 +143,15 @@ export function Globe() {
     c.update();
   };
 
-  // On touch the globe turns with the finger at every zoom; OrbitControls
-  // otherwise spins the same angle per swipe however close the camera is.
-  const followFinger = () => {
+  // OrbitControls spins the same angle per drag however close the camera is,
+  // so scale it with zoom: touch turns with the finger, a mouse keeps its usual feel.
+  const scaleRotate = () => {
     const c = controls.current;
-    if (!c || !window.matchMedia('(hover: none)').matches) return;
-    // 22.5° is half the camera fov.
-    c.rotateSpeed = (c.object.position.length() - 1) * Math.tan(THREE.MathUtils.degToRad(22.5)) / Math.PI;
+    if (!c) return;
+    const distance = c.object.position.length();
+    c.rotateSpeed = window.matchMedia('(hover: none)').matches
+      ? fingerRotateSpeed(distance, (c.object as THREE.PerspectiveCamera).fov)
+      : mouseRotateSpeed(distance, 3);
   };
 
   return (
@@ -170,7 +173,7 @@ export function Globe() {
             </mesh>
           </>
         )}
-        <OrbitControls ref={controls} enablePan={false} minDistance={1.2} maxDistance={6} zoomSpeed={0.6} onStart={followFinger} onChange={followFinger} />
+        <OrbitControls ref={controls} enablePan={false} minDistance={1.2} maxDistance={6} zoomSpeed={0.6} onStart={scaleRotate} onChange={scaleRotate} />
       </Canvas>
       <Tooltip tip={tip} />
       <ZoomButtons onZoom={zoomBy} />

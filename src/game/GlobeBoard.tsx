@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import type { Country } from '../countries';
+import { fingerRotateSpeed, mouseRotateSpeed } from '../globeRotate';
 import type { BoardProps, Focus } from './board';
 import { GamePainter, type Paint } from './painter';
 
@@ -95,13 +96,15 @@ export function GlobeBoard({ world, paints, focus, onPick }: BoardProps) {
     if (clicked) onPick(clicked, lonLat);
   };
 
-  // On touch the globe turns with the finger at every zoom; OrbitControls
-  // otherwise spins the same angle per swipe however close the camera is.
-  const followFinger = () => {
+  // OrbitControls spins the same angle per drag however close the camera is,
+  // so scale it with zoom: touch turns with the finger, a mouse keeps its usual feel.
+  const scaleRotate = () => {
     const c = controls.current;
-    if (!c || !window.matchMedia('(hover: none)').matches) return;
-    // 22.5° is half the camera fov.
-    c.rotateSpeed = (c.object.position.length() - 1) * Math.tan(THREE.MathUtils.degToRad(22.5)) / Math.PI;
+    if (!c) return;
+    const distance = c.object.position.length();
+    c.rotateSpeed = window.matchMedia('(hover: none)').matches
+      ? fingerRotateSpeed(distance, (c.object as THREE.PerspectiveCamera).fov)
+      : mouseRotateSpeed(distance, 3);
   };
 
   return (
@@ -121,7 +124,7 @@ export function GlobeBoard({ world, paints, focus, onPick }: BoardProps) {
           </mesh>
         </>
       )}
-      <OrbitControls ref={controls} makeDefault enablePan={false} minDistance={1.2} maxDistance={6} zoomSpeed={0.6} onStart={followFinger} onChange={followFinger} />
+      <OrbitControls ref={controls} makeDefault enablePan={false} minDistance={1.2} maxDistance={6} zoomSpeed={0.6} onStart={scaleRotate} onChange={scaleRotate} />
       <CameraRig focus={focus} />
     </Canvas>
   );
