@@ -47,6 +47,21 @@ function CameraRig({ focus }: { focus: Focus | null }) {
 export function GlobeBoard({ world, paints, focus, onPick }: BoardProps) {
   const [painter, setPainter] = useState<GamePainter | null>(null);
   const painted = useRef(new Map<Country, Paint>());
+  const [outline, setOutline] = useState('');
+
+  // The theme lives on <html data-theme>, or follows the device when unset.
+  useEffect(() => {
+    const read = () => setOutline(getComputedStyle(document.documentElement).getPropertyValue('--outline').trim());
+    read();
+    const observer = new MutationObserver(read);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    media.addEventListener('change', read);
+    return () => {
+      observer.disconnect();
+      media.removeEventListener('change', read);
+    };
+  }, []);
 
   useEffect(() => {
     const p = new GamePainter(world);
@@ -80,15 +95,21 @@ export function GlobeBoard({ world, paints, focus, onPick }: BoardProps) {
   };
 
   return (
-    <Canvas camera={{ position: [0, 0, 3], fov: 45 }}>
-      <ambientLight intensity={2.2} />
-      <directionalLight position={[5, 3, 5]} intensity={1} />
+    // flat + unlit: the sticker look, with token colours shown as-is.
+    <Canvas flat camera={{ position: [0, 0, 3], fov: 45 }}>
       {painter && (
-        // biome-ignore lint/a11y/noStaticElementInteractions: three.js mesh, not a DOM element
-        <mesh onClick={onClick}>
-          <sphereGeometry args={[1, 128, 64]} />
-          <meshStandardMaterial map={painter.texture} roughness={0.9} />
-        </mesh>
+        <>
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: three.js mesh, not a DOM element */}
+          <mesh onClick={onClick}>
+            <sphereGeometry args={[1, 128, 64]} />
+            <meshBasicMaterial map={painter.texture} />
+          </mesh>
+          {/* Sticker edge: a slightly bigger back-face sphere shows as an outline ring. */}
+          <mesh scale={1.025}>
+            <sphereGeometry args={[1, 64, 32]} />
+            <meshBasicMaterial color={outline} side={THREE.BackSide} />
+          </mesh>
+        </>
       )}
       <OrbitControls makeDefault enablePan={false} minDistance={1.2} maxDistance={6} zoomSpeed={0.6} />
       <CameraRig focus={focus} />

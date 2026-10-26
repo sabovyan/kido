@@ -11,17 +11,23 @@ export const Route = createFileRoute('/country/discover')({
   component: CountryDiscover,
 });
 
+const OPTION = 'inline-flex h-tap-min items-center gap-2 rounded-sm px-4 font-body text-label no-underline transition-colors duration-(--dur-tap) motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500';
+const SELECTED = `${OPTION} bg-ocean-500 text-on-ocean`;
+const UNSELECTED = `${OPTION} text-fg hover:bg-surface-sunk`;
+
 function CountryDiscover() {
   const { view } = Route.useSearch();
   const isGlobe = view === 'globe';
 
   return (
-    <div className={`view ${isGlobe ? 'globe' : 'map'}`}>
-      <div className="view-toggle">
-        <Link from={Route.fullPath} search={{}} activeProps={{}} className={isGlobe ? '' : 'active'}>Map</Link>
-        <Link from={Route.fullPath} search={{ view: 'globe' }} activeProps={{}} className={isGlobe ? 'active' : ''}>Globe</Link>
+    <div className="box-border h-full bg-page px-6 pb-6 max-md:p-0">
+      <div className={`relative box-border h-full overflow-hidden rounded-lg border-3 border-outline max-md:rounded-none max-md:border-0 ${isGlobe ? 'bg-backdrop' : 'bg-map-sea'}`}>
+        <nav aria-label="View" className="absolute top-4 left-4 z-3 inline-flex gap-1 rounded-md border-3 border-outline bg-surface p-1 shadow-drop-sm">
+          <Link from={Route.fullPath} search={{}} activeProps={{}} aria-current={isGlobe ? undefined : 'page'} className={isGlobe ? UNSELECTED : SELECTED}>Map</Link>
+          <Link from={Route.fullPath} search={{ view: 'globe' }} activeProps={{}} aria-current={isGlobe ? 'page' : undefined} className={isGlobe ? SELECTED : UNSELECTED}>Globe</Link>
+        </nav>
+        {isGlobe ? <Globe /> : <FlatMap />}
       </div>
-      {isGlobe ? <Globe /> : <FlatMap />}
     </div>
   );
 }

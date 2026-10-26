@@ -2,9 +2,17 @@ import { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import { flagUrl, mainBounds, type Country } from '../countries';
 import type { BoardProps } from './board';
-import { COLORS, type Paint } from './painter';
+import type { Paint } from './painter';
+
+const FILLS: Record<Paint, string> = {
+  blank: 'var(--map-land)',
+  flag: 'var(--map-land)',
+  wrong: 'var(--map-wrong)',
+  answer: 'var(--map-answer)',
+};
 
 const width = 1600, height = 820;
+const COUNTRY = 'stroke-map-border stroke-[0.6] [vector-effect:non-scaling-stroke] hover:stroke-outline hover:stroke-2';
 
 type Scene = {
   svg: d3.Selection<SVGSVGElement, unknown, null, undefined>;
@@ -35,7 +43,7 @@ export function FlatBoard({ world, paints, focus, onPick }: BoardProps) {
       .fitExtent([[10, 10], [width - 10, height - 10]], { type: 'Sphere' });
     const path = d3.geoPath(projection);
 
-    g.append('path').attr('class', 'sphere').attr('d', path({ type: 'Sphere' }));
+    g.append('path').attr('class', 'fill-map-sea').attr('d', path({ type: 'Sphere' }));
 
     const flags = new Map<Country, string>();
     world.features.forEach((f, i) => {
@@ -57,9 +65,9 @@ export function FlatBoard({ world, paints, focus, onPick }: BoardProps) {
     const paths = g.selectAll<SVGPathElement, Country>('path.country')
       .data(world.features)
       .join('path')
-      .attr('class', 'country')
+      .attr('class', `country ${COUNTRY}`)
       .attr('d', path)
-      .attr('fill', COLORS.blank)
+      .style('fill', FILLS.blank)
       // d3-zoom swallows the click that ends a drag, so this only fires on real clicks.
       .on('click', (event: MouseEvent, d) => {
         const lonLat = projection.invert?.(d3.pointer(event, g.node()));
@@ -80,8 +88,8 @@ export function FlatBoard({ world, paints, focus, onPick }: BoardProps) {
     const s = scene.current;
     if (!s) return;
     const fill = (paint: Paint | undefined, d: Country) =>
-      paint === 'flag' ? (s.flags.get(d) ?? COLORS.blank) : COLORS[paint ?? 'blank'];
-    s.paths.attr('fill', d => fill(paints.get(d), d));
+      paint === 'flag' ? (s.flags.get(d) ?? FILLS.flag) : FILLS[paint ?? 'blank'];
+    s.paths.style('fill', d => fill(paints.get(d), d));
   }, [paints]);
 
   // Zoom to the focused country's mainland.
@@ -96,5 +104,5 @@ export function FlatBoard({ world, paints, focus, onPick }: BoardProps) {
     s.svg.transition().duration(1200).call(s.zoom.transform, t);
   }, [focus]);
 
-  return <svg ref={svgRef} className="flat-map" />;
+  return <svg ref={svgRef} className="block size-full cursor-crosshair" />;
 }

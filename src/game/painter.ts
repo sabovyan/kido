@@ -5,13 +5,18 @@ import { flagPngUrl, mainBounds, type Country, type World } from '../countries';
 export type Paint = 'blank' | 'flag' | 'wrong' | 'answer';
 
 const TEX_W = 8192, TEX_H = 4096;
-export const COLORS = {
-  ocean: '#7fb0d6',
-  blank: '#e6e2d6',
-  wrong: '#e5484d',
-  answer: '#f5a524',
-  border: '#555',
-};
+// Canvas can't use CSS variables, so the theme's map tokens are read when a round starts.
+function readColors() {
+  const css = getComputedStyle(document.documentElement);
+  const token = (name: string) => css.getPropertyValue(name).trim();
+  return {
+    ocean: token('--map-sea'),
+    blank: token('--map-land'),
+    wrong: token('--map-wrong'),
+    answer: token('--map-answer'),
+    border: token('--map-border'),
+  };
+}
 
 function loadImage(src: string) {
   return new Promise<HTMLImageElement | null>(resolve => {
@@ -31,6 +36,7 @@ export class GamePainter {
   private path: d3.GeoPath<any, any>;
   private boundsPath: d3.GeoPath<any, any>;
   private images = new Map<string, Promise<HTMLImageElement | null>>();
+  private colors = readColors();
 
   constructor(private world: World) {
     const canvas = document.createElement('canvas');
@@ -51,14 +57,16 @@ export class GamePainter {
   }
 
   reset() {
+    this.colors = readColors();
     const { ctx } = this;
-    ctx.fillStyle = COLORS.ocean;
+    const colors = this.colors;
+    ctx.fillStyle = colors.ocean;
     ctx.fillRect(0, 0, TEX_W, TEX_H);
     ctx.beginPath();
     this.world.features.forEach(f => { this.path(f); });
-    ctx.fillStyle = COLORS.blank;
+    ctx.fillStyle = colors.blank;
     ctx.fill();
-    ctx.strokeStyle = COLORS.border;
+    ctx.strokeStyle = colors.border;
     ctx.lineWidth = 1.5;
     ctx.stroke();
     this.texture.needsUpdate = true;
@@ -81,6 +89,7 @@ export class GamePainter {
     const imgs = await Promise.all(features.map(f =>
       mode === 'flag' && f.properties.code ? this.flag(f.properties.code) : Promise.resolve(null)));
     const { ctx } = this;
+    const colors = this.colors;
 
     features.forEach((f, i) => {
       ctx.save();
@@ -92,14 +101,14 @@ export class GamePainter {
         const [[x0, y0], [x1, y1]] = mainBounds(this.boundsPath, f);
         ctx.drawImage(img, x0, y0, x1 - x0, y1 - y0);
       } else {
-        ctx.fillStyle = mode === 'flag' ? COLORS.blank : COLORS[mode];
+        ctx.fillStyle = mode === 'flag' ? colors.blank : colors[mode];
         ctx.fill();
       }
       ctx.restore();
 
       ctx.beginPath();
       this.path(f);
-      ctx.strokeStyle = COLORS.border;
+      ctx.strokeStyle = colors.border;
       ctx.lineWidth = 1.5;
       ctx.stroke();
     });

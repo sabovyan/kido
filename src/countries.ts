@@ -15,6 +15,17 @@ export function loadWorld(): Promise<World> {
   return worldPromise;
 }
 
+let userCountryPromise: Promise<string | null> | null = null;
+
+// Player's country from their IP (lowercase flag code), or null if the lookup fails.
+export function loadUserCountry(): Promise<string | null> {
+  userCountryPromise ??= fetch('https://api.country.is/')
+    .then(r => (r.ok ? r.json() : null))
+    .then((d: { country?: string } | null) => d?.country?.toLowerCase() ?? null)
+    .catch(() => null);
+  return userCountryPromise;
+}
+
 // Bounds of the largest polygon, so flags of countries with far-off islands
 // (USA, France, Norway...) are fitted to the mainland.
 export function mainBounds(path: d3.GeoPath<any, any>, feature: Country) {

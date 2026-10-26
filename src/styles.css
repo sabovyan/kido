@@ -141,28 +141,7 @@
   --map-border: #0B1630;
 }
 
-html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; overflow: hidden; }
-.app { height: 100%; display: flex; flex-direction: column; background: #0f1828; }
-
-.section { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
-
-.view { position: relative; height: 100%; }
-.view.map { background: #dfeaf3; }
-.view.globe { background: radial-gradient(circle at center, #1b2a44, #05070d); }
-.view-toggle { position: absolute; top: 12px; left: 16px; z-index: 3; display: flex; gap: 4px; }
-.view-toggle a { border: 1px solid #8aa1b4; background: #fff; color: #1d2b36; padding: 4px 12px; border-radius: 4px; font-size: 14px; text-decoration: none; }
-.view-toggle a.active { background: #1d2b36; color: #fff; border-color: #1d2b36; }
-
-.flat-map { display: block; width: 100%; height: 100%; cursor: grab; }
-.flat-map:active { cursor: grabbing; }
-.country { stroke: #333; stroke-width: 0.6; vector-effect: non-scaling-stroke; }
-.country:hover { stroke: #000; stroke-width: 2; }
-.sphere { fill: #b9d3e8; }
-
-.loading { position: absolute; inset: 0; display: grid; place-items: center; color: #e8eef6; font-size: 16px; pointer-events: none; }
-
-.tip { position: fixed; pointer-events: none; background: rgba(20,20,20,.85); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 13px; z-index: 2; }
-.tip img { height: 12px; margin-right: 6px; vertical-align: -1px; }
-
-.compass { color: #e8eef6; font-weight: 700; font-size: 18px; text-shadow: 0 0 6px #000; pointer-events: none; user-select: none; }
+/* Page basics. Everything else is Tailwind classes on the components. */
+@layer base {
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-body); }
+}
