@@ -1,14 +1,76 @@
-/* Sticker Atlas tokens. Day is the default; Night follows the OS unless data-theme="light", or is forced with data-theme="dark". */
+/* Tailwind without preflight, so the existing screens keep their look until they move to utilities. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source("../src");
+
+/* `dark:` follows the same rule as the tokens below. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) { @slot; }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) { @slot; }
+  }
+}
+
+/* Sticker Atlas: tokens that are the same in Day and Night. */
+@theme {
+  --color-ocean-500: #1A63D6; --color-ocean-700: #0F4AA8;
+  --color-sun-400: #FFC83D; --color-sun-600: #E0A100;
+  --color-leaf-500: #2DBE7B; --color-leaf-700: #12804F;
+  --color-coral-500: #FF6B5E; --color-coral-700: #C2362B;
+  --color-grape-500: #6A4BEB; --color-grape-700: #4B2FC2;
+  --color-on-ocean: #FFFFFF; --color-on-sun: #14213D; --color-on-leaf: #14213D; --color-on-coral: #14213D; --color-on-grape: #FFFFFF;
+
+  --font-display: 'Baloo 2', system-ui, sans-serif;
+  --font-body: 'Nunito', system-ui, sans-serif;
+
+  --text-display: 56px; --text-display--line-height: 60px; --text-display--font-weight: 800;
+  --text-title-1: 40px; --text-title-1--line-height: 44px; --text-title-1--font-weight: 800;
+  --text-title-2: 28px; --text-title-2--line-height: 32px; --text-title-2--font-weight: 700;
+  --text-title-3: 22px; --text-title-3--line-height: 28px; --text-title-3--font-weight: 700;
+  --text-body-lg: 20px; --text-body-lg--line-height: 30px; --text-body-lg--font-weight: 600;
+  --text-body: 18px; --text-body--line-height: 28px; --text-body--font-weight: 500;
+  --text-label: 18px; --text-label--line-height: 20px; --text-label--font-weight: 900;
+  --text-number: 32px; --text-number--line-height: 32px; --text-number--font-weight: 800;
+  --text-caption: 15px; --text-caption--line-height: 20px; --text-caption--font-weight: 800;
+
+  /* Spacing stays Tailwind's 4px scale: 1=4, 2=8, 3=12, 4=16, 6=24, 8=32, 12=48, 16=64. */
+  --spacing: 4px;
+  --spacing-tap-min: 48px; --spacing-tap-icon: 56px; --spacing-tap-main: 64px;
+
+  --radius-sm: 12px; --radius-md: 16px; --radius-lg: 24px; --radius-pill: 999px;
+
+  --ease-bouncy: cubic-bezier(.34, 1.56, .64, 1);
+}
+
+/* Theme-switching tokens as Tailwind colors and shadows (bg-page, text-fg, border-outline, shadow-drop-md...). */
+@theme inline {
+  --color-page: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-sunk: var(--surface-sunk);
+  --color-fg: var(--text);
+  --color-fg-muted: var(--text-muted);
+  --color-outline: var(--outline);
+  --color-drop: var(--drop);
+  --color-link: var(--link);
+  --color-tint-correct: var(--tint-correct); --color-on-tint-correct: var(--on-tint-correct);
+  --color-tint-oops: var(--tint-oops); --color-on-tint-oops: var(--on-tint-oops);
+  --color-tint-hint: var(--tint-hint); --color-on-tint-hint: var(--on-tint-hint);
+  --color-tint-reward: var(--tint-reward); --color-on-tint-reward: var(--on-tint-reward);
+  --color-backdrop: var(--space-bg);
+  --color-scrim: var(--scrim);
+  --color-map-sea: var(--map-sea);
+  --color-map-land: var(--map-land);
+  --color-map-border: var(--map-border);
+  --color-map-answer: var(--map-answer);
+  --color-map-wrong: var(--map-wrong);
+  --shadow-drop-sm: 0 4px 0 var(--drop);
+  --shadow-drop-md: 0 5px 0 var(--drop);
+  --shadow-drop-lg: 0 6px 0 var(--drop);
+}
+
+/* Sticker Atlas: Day is the default; Night follows the OS unless data-theme="light", or is forced with data-theme="dark". */
 :root {
   color-scheme: light;
-
-  /* Brand (same in both themes) */
-  --ocean-500: #1A63D6; --ocean-700: #0F4AA8;
-  --sun-400: #FFC83D; --sun-600: #E0A100;
-  --leaf-500: #2DBE7B; --leaf-700: #12804F;
-  --coral-500: #FF6B5E; --coral-700: #C2362B;
-  --grape-500: #6A4BEB; --grape-700: #4B2FC2;
-  --on-ocean: #FFFFFF; --on-sun: #14213D; --on-leaf: #14213D; --on-coral: #14213D; --on-grape: #FFFFFF;
 
   /* Semantic: Day */
   --bg: #EEF7FF;
@@ -28,23 +90,10 @@
   --map-sea: #6EC1F5;
   --map-land: #F5EEDB;
   --map-border: #3B4A6B;
-  --map-answer: var(--sun-400);
-  --map-wrong: var(--coral-500);
+  --map-answer: var(--color-sun-400);
+  --map-wrong: var(--color-coral-500);
 
-  /* Type */
-  --font-display: 'Baloo 2', system-ui, sans-serif;
-  --font-body: 'Nunito', system-ui, sans-serif;
-  --text-display: 56px; --text-title-1: 40px; --text-title-2: 28px; --text-title-3: 22px;
-  --text-body-lg: 20px; --text-body: 18px; --text-label: 18px; --text-number: 32px; --text-caption: 15px;
-
-  /* Space, shape, motion */
-  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
-  --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px;
-  --radius-sm: 12px; --radius-md: 16px; --radius-lg: 24px; --radius-pill: 999px;
-  --border-width: 3px;
-  --drop-sm: 0 4px 0 var(--drop); --drop-md: 0 5px 0 var(--drop); --drop-lg: 0 6px 0 var(--drop);
-  --tap-min: 48px; --tap-icon: 56px; --tap-main: 64px;
-  --ease-bouncy: cubic-bezier(.34, 1.56, .64, 1);
+  /* Motion */
   --dur-tap: 90ms; --dur-pop: 240ms; --dur-wobble: 360ms; --dur-fly: 1200ms;
 }
 
@@ -95,18 +144,7 @@
 html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; overflow: hidden; }
 .app { height: 100%; display: flex; flex-direction: column; background: #0f1828; }
 
-.topbar { display: flex; align-items: center; gap: 20px; padding: 10px 16px; color: #e8eef6; border-bottom: 1px solid #22304a; }
-.topbar h1 { margin: 0; font-size: 17px; }
-.nav { display: flex; gap: 4px; }
-.nav a { color: #c3d0dd; padding: 5px 12px; border-radius: 6px; font-size: 14px; text-decoration: none; }
-.nav a:hover { color: #fff; background: #1b2a44; }
-.nav a.active { color: #fff; background: #3b82f6; }
-
 .section { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.subbar { display: flex; gap: 16px; padding: 0 16px; background: #16213a; border-bottom: 1px solid #22304a; }
-.subbar a { color: #9fb6cc; padding: 8px 0; font-size: 13px; text-decoration: none; border-bottom: 2px solid transparent; }
-.subbar a:hover { color: #fff; }
-.subbar a.active { color: #fff; border-bottom-color: #3b82f6; }
 .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 
 .view { position: relative; height: 100%; }

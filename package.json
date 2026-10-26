@@ -15,6 +15,7 @@
     "check": "biome check"
   },
   "dependencies": {
+    "@base-ui/react": "^1.9.0",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
     "@tanstack/react-router": "1.170.46",
@@ -26,6 +27,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.5",
+    "@tailwindcss/vite": "^4.3.3",
     "@tanstack/router-cli": "^1.132.0",
     "@types/d3": "^7.4.3",
     "@types/geojson": "^7946.0.16",
@@ -34,6 +36,7 @@
     "@types/react-dom": "^19.2.0",
     "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.0.1",
+    "tailwindcss": "^4.3.3",
     "typescript": "^6.0.2",
     "vite": "^8.0.0"
   }
