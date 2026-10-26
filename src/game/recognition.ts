@@ -1,0 +1,30 @@
+// Share of players who named each flag correctly in Sporcle's "Flags of the World"
+// quiz (~14M plays, stats as of July 2026): https://www.sporcle.com/games/g/worldflags/results
+// Used to pick which countries each difficulty asks about.
+export const FLAG_RECOGNITION: Record<string, number> = {
+  jp: 85.7, ca: 85.6, br: 85.3, kr: 85.2, us: 85.1, gb: 84.8, in: 84.4, cn: 84.1,
+  de: 84.1, es: 83.8, fr: 83.7, ch: 83.2, ar: 83.1, tr: 83, gr: 83, se: 82.9,
+  au: 82.8, it: 82.7, il: 82.7, mx: 82.5, za: 82.5, ie: 82.5, ua: 81.6, jm: 81.5,
+  fi: 81.5, np: 81, pl: 80.9, no: 80.8, sa: 80.5, ru: 80.2, pt: 80.1, nz: 80,
+  be: 79.9, kp: 79.5, qa: 79.4, dk: 78.8, pk: 78.5, ge: 78.5, vn: 78.2, cy: 78,
+  ng: 78, eg: 77.6, al: 77.5, is: 77.2, hr: 76.9, lb: 76.7, ma: 76.6, bd: 76.5,
+  nl: 76.1, lk: 75.7, ke: 75.6, ir: 75.3, th: 75.2, iq: 75, cl: 74.8, id: 74.3,
+  va: 74.2, ro: 74.2, uy: 74, sk: 73.7, mk: 73.5, my: 73.3, cz: 72.7, at: 72.6,
+  co: 72.6, pa: 72.5, ve: 72.3, ee: 72, cu: 71.9, ph: 71.5, bt: 71.4, si: 71.2,
+  rs: 71.2, ci: 71.2, sg: 71.1, kh: 70.8, ps: 70.7, so: 69.9, bb: 69.8, hu: 69.7,
+  tn: 69.5, af: 69.3, dz: 69.3, lu: 69.3, xk: 68.8, lv: 68.6, fj: 68.5, ae: 68.5,
+  mc: 68.5, ug: 68.3, kz: 68.2, sc: 67.8, mt: 67.7, pe: 67.6, bh: 67.1, ao: 66.9,
+  mn: 66.9, jo: 66.8, la: 66.7, ec: 66.5, gh: 66.3, do: 66.2, tw: 66, ne: 65.9,
+  bg: 65.4, by: 65.3, ba: 65.2, td: 65.1, et: 64.9, hn: 64.6, sm: 64.2, uz: 63.7,
+  me: 63.4, bs: 62.7, lr: 62.6, sn: 62.2, cr: 62.2, kw: 62, ht: 61.7, md: 61.6,
+  ad: 61.6, am: 61.6, lc: 61.5, ye: 61.4, sy: 61.3, tm: 61.1, az: 60.9, pg: 60.5,
+  cm: 60.2, fm: 60, mv: 60, gt: 59.9, cd: 59.8, bw: 59.8, zw: 59.7, lt: 59.5,
+  tt: 59.4, om: 59.2, li: 59.1, py: 59, bn: 58.5, mm: 58.5, sd: 58.4, mg: 58.3,
+  ni: 58.2, sv: 58.2, kg: 58.1, pw: 57.8, sz: 57.4, to: 57.3, zm: 57.2, ls: 57.1,
+  dm: 56.9, mz: 56.9, cf: 56.6, cv: 55.9, ki: 55.8, ly: 55.6, ss: 55.4, mh: 54.7,
+  tz: 54.4, mw: 54.4, ws: 54.2, bz: 54, tj: 53, bi: 53, ml: 53, bo: 52.6,
+  tg: 52.6, tv: 52.5, gd: 52.3, vc: 52.2, bf: 52.1, tl: 52.1, sr: 52, dj: 51.7,
+  gy: 51.5, er: 51.3, bj: 51.1, ga: 50.9, ag: 50.8, sl: 50.8, mr: 50.4, rw: 49.8,
+  mu: 49.7, nr: 48.9, km: 48.9, vu: 48.2, sb: 48.2, gn: 47.3, kn: 47.2, na: 46.9,
+  st: 46.8, gq: 46.7, gm: 46.6, cg: 45.7, gw: 44.4,
+};

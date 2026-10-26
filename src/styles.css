@@ -1,0 +1,130 @@
+/* Sticker Atlas tokens. Day is the default; Night follows the OS unless data-theme="light", or is forced with data-theme="dark". */
+:root {
+  color-scheme: light;
+
+  /* Brand (same in both themes) */
+  --ocean-500: #1A63D6; --ocean-700: #0F4AA8;
+  --sun-400: #FFC83D; --sun-600: #E0A100;
+  --leaf-500: #2DBE7B; --leaf-700: #12804F;
+  --coral-500: #FF6B5E; --coral-700: #C2362B;
+  --grape-500: #6A4BEB; --grape-700: #4B2FC2;
+  --on-ocean: #FFFFFF; --on-sun: #14213D; --on-leaf: #14213D; --on-coral: #14213D; --on-grape: #FFFFFF;
+
+  /* Semantic: Day */
+  --bg: #EEF7FF;
+  --surface: #FFFFFF;
+  --surface-sunk: #D6ECFF;
+  --text: #14213D;
+  --text-muted: #4A5878;
+  --outline: #14213D;
+  --drop: #14213D;
+  --link: #1A63D6;
+  --tint-correct: #D2F5E2; --on-tint-correct: #14213D;
+  --tint-oops: #FFE1DD; --on-tint-oops: #14213D;
+  --tint-hint: #FFE9A8; --on-tint-hint: #14213D;
+  --tint-reward: #E6DFFF; --on-tint-reward: #14213D;
+  --space-bg: #BFE3FF;
+  --scrim: rgba(20, 33, 61, 0.35);
+  --map-sea: #6EC1F5;
+  --map-land: #F5EEDB;
+  --map-border: #3B4A6B;
+  --map-answer: var(--sun-400);
+  --map-wrong: var(--coral-500);
+
+  /* Type */
+  --font-display: 'Baloo 2', system-ui, sans-serif;
+  --font-body: 'Nunito', system-ui, sans-serif;
+  --text-display: 56px; --text-title-1: 40px; --text-title-2: 28px; --text-title-3: 22px;
+  --text-body-lg: 20px; --text-body: 18px; --text-label: 18px; --text-number: 32px; --text-caption: 15px;
+
+  /* Space, shape, motion */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px;
+  --radius-sm: 12px; --radius-md: 16px; --radius-lg: 24px; --radius-pill: 999px;
+  --border-width: 3px;
+  --drop-sm: 0 4px 0 var(--drop); --drop-md: 0 5px 0 var(--drop); --drop-lg: 0 6px 0 var(--drop);
+  --tap-min: 48px; --tap-icon: 56px; --tap-main: 64px;
+  --ease-bouncy: cubic-bezier(.34, 1.56, .64, 1);
+  --dur-tap: 90ms; --dur-pop: 240ms; --dur-wobble: 360ms; --dur-fly: 1200ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0B1630;
+    --surface: #16264F;
+    --surface-sunk: #0F1D40;
+    --text: #F2F6FF;
+    --text-muted: #B9C6E4;
+    --outline: #8EA2D6;
+    --drop: #050A18;
+    --link: #8DB8FF;
+    --tint-correct: #12402D; --on-tint-correct: #D2F5E2;
+    --tint-oops: #4A1E22; --on-tint-oops: #FFE1DD;
+    --tint-hint: #4A3A0E; --on-tint-hint: #FFE9A8;
+    --tint-reward: #2E2366; --on-tint-reward: #E6DFFF;
+    --space-bg: #060C1C;
+    --scrim: rgba(6, 12, 28, 0.6);
+    --map-sea: #1E4E8C;
+    --map-land: #D9D1BC;
+    --map-border: #0B1630;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0B1630;
+  --surface: #16264F;
+  --surface-sunk: #0F1D40;
+  --text: #F2F6FF;
+  --text-muted: #B9C6E4;
+  --outline: #8EA2D6;
+  --drop: #050A18;
+  --link: #8DB8FF;
+  --tint-correct: #12402D; --on-tint-correct: #D2F5E2;
+  --tint-oops: #4A1E22; --on-tint-oops: #FFE1DD;
+  --tint-hint: #4A3A0E; --on-tint-hint: #FFE9A8;
+  --tint-reward: #2E2366; --on-tint-reward: #E6DFFF;
+  --space-bg: #060C1C;
+  --scrim: rgba(6, 12, 28, 0.6);
+  --map-sea: #1E4E8C;
+  --map-land: #D9D1BC;
+  --map-border: #0B1630;
+}
+
+html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; overflow: hidden; }
+.app { height: 100%; display: flex; flex-direction: column; background: #0f1828; }
+
+.topbar { display: flex; align-items: center; gap: 20px; padding: 10px 16px; color: #e8eef6; border-bottom: 1px solid #22304a; }
+.topbar h1 { margin: 0; font-size: 17px; }
+.nav { display: flex; gap: 4px; }
+.nav a { color: #c3d0dd; padding: 5px 12px; border-radius: 6px; font-size: 14px; text-decoration: none; }
+.nav a:hover { color: #fff; background: #1b2a44; }
+.nav a.active { color: #fff; background: #3b82f6; }
+
+.section { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.subbar { display: flex; gap: 16px; padding: 0 16px; background: #16213a; border-bottom: 1px solid #22304a; }
+.subbar a { color: #9fb6cc; padding: 8px 0; font-size: 13px; text-decoration: none; border-bottom: 2px solid transparent; }
+.subbar a:hover { color: #fff; }
+.subbar a.active { color: #fff; border-bottom-color: #3b82f6; }
+.stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+
+.view { position: relative; height: 100%; }
+.view.map { background: #dfeaf3; }
+.view.globe { background: radial-gradient(circle at center, #1b2a44, #05070d); }
+.view-toggle { position: absolute; top: 12px; left: 16px; z-index: 3; display: flex; gap: 4px; }
+.view-toggle a { border: 1px solid #8aa1b4; background: #fff; color: #1d2b36; padding: 4px 12px; border-radius: 4px; font-size: 14px; text-decoration: none; }
+.view-toggle a.active { background: #1d2b36; color: #fff; border-color: #1d2b36; }
+
+.flat-map { display: block; width: 100%; height: 100%; cursor: grab; }
+.flat-map:active { cursor: grabbing; }
+.country { stroke: #333; stroke-width: 0.6; vector-effect: non-scaling-stroke; }
+.country:hover { stroke: #000; stroke-width: 2; }
+.sphere { fill: #b9d3e8; }
+
+.loading { position: absolute; inset: 0; display: grid; place-items: center; color: #e8eef6; font-size: 16px; pointer-events: none; }
+
+.tip { position: fixed; pointer-events: none; background: rgba(20,20,20,.85); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 13px; z-index: 2; }
+.tip img { height: 12px; margin-right: 6px; vertical-align: -1px; }
+
+.compass { color: #e8eef6; font-weight: 700; font-size: 18px; text-shadow: 0 0 6px #000; pointer-events: none; user-select: none; }

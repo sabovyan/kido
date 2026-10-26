@@ -1,0 +1,23 @@
+.game { position: relative; height: 100%; color: #e8eef6; background: radial-gradient(circle at center, #1b2a44, #05070d); }
+.game canvas, .game .flat-map { cursor: crosshair; }
+
+.stats { position: absolute; top: 16px; right: 16px; z-index: 1; display: flex; gap: 16px; font-size: 14px; color: #c3d0dd; }
+.stats b { color: #fff; }
+.lives { color: #e5484d; letter-spacing: 2px; }
+.lives .lost { color: #3a4556; }
+
+.prompt { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; background: rgba(10, 16, 28, .85); border: 1px solid #2c3a52; border-radius: 10px; padding: 12px 18px; max-width: calc(100vw - 32px); box-sizing: border-box; }
+.prompt img { height: 64px; border: 1px solid #2c3a52; }
+.prompt-label { font-size: 15px; font-weight: 600; }
+.feedback { margin-top: 4px; font-size: 14px; }
+.feedback.ok { color: #46c97a; }
+.feedback.bad { color: #ff8a8d; }
+
+.overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(5, 7, 13, .55); z-index: 2; padding: 16px; }
+.card { background: #0f1828; border: 1px solid #2c3a52; border-radius: 12px; padding: 24px 28px; max-width: 420px; text-align: center; }
+.card h2 { margin: 0 0 8px; }
+.card p { color: #c3d0dd; line-height: 1.45; }
+.actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+.actions button { border: 0; background: #3b82f6; color: #fff; padding: 8px 14px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; }
+.actions button.secondary { background: #2c3a52; }
+.actions button:disabled { opacity: .5; cursor: default; }
