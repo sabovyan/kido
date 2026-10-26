@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import * as d3 from 'd3';
 import type { Polygon } from 'geojson';
 import { flagUrl, loadUserCountry, loadWorld, type Country, type World } from '../countries';
@@ -184,11 +185,14 @@ export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactN
   const [paints, setPaints] = useState<Map<Country, Paint>>(new Map());
   const [missed, setMissed] = useState<Target[]>([]);
   const [homeCode, setHomeCode] = useState<string | null>(null);
+  // The `#game-hud` slot in the app's top bar (desktop).
+  const [hudSlot, setHudSlot] = useState<HTMLElement | null>(null);
   const firstRound = useRef(true);
   const timer = useRef<number>(undefined);
 
   useEffect(() => {
     let cancelled = false;
+    setHudSlot(document.getElementById('game-hud'));
     loadWorld().then(w => {
       if (!cancelled) setWorld(w);
     });
@@ -293,37 +297,51 @@ export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactN
     }
   };
 
+  const inGame = phase === 'playing' || phase === 'feedback';
+
+  const chips = (
+    <>
+      <div role="img" aria-label={`${lives} of ${LIVES} hearts left`} className={`${CHIP} gap-1 border-outline bg-surface ${IN_BAR}`}>
+        {HEARTS.map((key, i) => <HeartIcon key={key} lost={i >= lives} />)}
+      </div>
+      <div className={`${CHIP} border-outline bg-surface ${IN_BAR}`}>
+        <StarIcon />
+        <span className="font-display text-title-3 font-extrabold tabular-nums">{score}</span>
+        <span className="sr-only">points</span>
+      </div>
+      {/* Brand fills keep an ink edge in both themes. */}
+      <div className={`${CHIP} border-on-sun bg-grape-500 text-on-grape max-md:hidden`}>
+        <FlameIcon />
+        <span className="font-display text-title-3 font-extrabold tabular-nums">×{streak}</span>
+        <span className="sr-only">streak</span>
+      </div>
+      <div className={`${CHIP} border-outline bg-surface text-label tabular-nums ${IN_BAR}`}>
+        <FlagIcon />
+        {collected.size} / {queue.length}
+        <span className="sr-only">flags</span>
+      </div>
+    </>
+  );
+
   return (
     // `[&_canvas]` aims the globe's three.js canvas, which the board renders itself.
     // `data-game-active` hides the app's top bar and tab bar on phones while playing.
-    <div data-game-active={phase === 'playing' || phase === 'feedback' ? '' : undefined} className={`relative h-full font-body text-fg [&_canvas]:cursor-crosshair ${view === 'globe' ? 'bg-backdrop' : 'bg-map-sea'}`}>
+    <div data-game-active={inGame ? '' : undefined} className={`relative h-full font-body text-fg [&_canvas]:cursor-crosshair ${view === 'globe' ? 'bg-backdrop' : 'bg-map-sea'}`}>
+      {/* Desktop: the chips sit in the top bar, only while playing. */}
+      {inGame && hudSlot && createPortal(
+        <div className="flex flex-wrap justify-end gap-3 font-body text-fg">{chips}</div>,
+        hudSlot,
+      )}
       {phase !== 'start' && (
         <div className="absolute top-4 right-4 z-1 flex flex-wrap justify-end gap-3 max-md:top-3 max-md:right-3 max-md:left-3 max-md:flex-nowrap max-md:justify-start">
-          {(phase === 'playing' || phase === 'feedback') && (
+          {inGame && (
             <button type="button" aria-label="Stop game" onClick={stop} className="grid size-tap-icon shrink-0 cursor-pointer place-items-center rounded-md border-3 border-outline bg-surface p-0 text-fg shadow-drop-sm transition-transform duration-(--dur-tap) active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 md:hidden">
               <XIcon />
             </button>
           )}
-          <div className="contents max-md:box-border max-md:flex max-md:h-tap-icon max-md:min-w-0 max-md:flex-1 max-md:items-center max-md:justify-between max-md:rounded-pill max-md:border-3 max-md:border-outline max-md:bg-surface max-md:px-4 max-md:shadow-drop-sm">
-            <div role="img" aria-label={`${lives} of ${LIVES} hearts left`} className={`${CHIP} gap-1 border-outline bg-surface ${IN_BAR}`}>
-              {HEARTS.map((key, i) => <HeartIcon key={key} lost={i >= lives} />)}
-            </div>
-            <div className={`${CHIP} border-outline bg-surface ${IN_BAR}`}>
-              <StarIcon />
-              <span className="font-display text-title-3 font-extrabold tabular-nums">{score}</span>
-              <span className="sr-only">points</span>
-            </div>
-            {/* Brand fills keep an ink edge in both themes. */}
-            <div className={`${CHIP} border-on-sun bg-grape-500 text-on-grape max-md:hidden`}>
-              <FlameIcon />
-              <span className="font-display text-title-3 font-extrabold tabular-nums">×{streak}</span>
-              <span className="sr-only">streak</span>
-            </div>
-            <div className={`${CHIP} border-outline bg-surface text-label tabular-nums ${IN_BAR}`}>
-              <FlagIcon />
-              {collected.size} / {queue.length}
-              <span className="sr-only">flags</span>
-            </div>
+          {/* Phones: one score bar over the globe. */}
+          <div className="contents md:hidden max-md:box-border max-md:flex max-md:h-tap-icon max-md:min-w-0 max-md:flex-1 max-md:items-center max-md:justify-between max-md:rounded-pill max-md:border-3 max-md:border-outline max-md:bg-surface max-md:px-4 max-md:shadow-drop-sm">
+            {chips}
           </div>
           <div className={`${CHIP} border-outline bg-surface text-label tabular-nums max-md:hidden`}>
             Land {formatPercent(landShare)}
@@ -338,7 +356,7 @@ export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactN
         ? <GlobeBoard world={world} paints={paints} focus={focus} onPick={onPick} />
         : <FlatBoard world={world} paints={paints} focus={focus} onPick={onPick} />)}
 
-      {(phase === 'playing' || phase === 'feedback') && target && (
+      {inGame && target && (
         <div className="absolute bottom-6 left-1/2 flex w-[560px] max-w-[calc(100%-32px)] -translate-x-1/2 flex-col gap-3 max-md:right-3 max-md:bottom-[max(16px,env(safe-area-inset-bottom))] max-md:left-3 max-md:w-auto max-md:max-w-none max-md:translate-x-0">
           {/* On phones the feedback takes the question card's place instead of stacking on it. */}
           {feedback && (
@@ -357,9 +375,6 @@ export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactN
             <img src={flagUrl(target.code)} alt="Find the country with this flag" className="block h-16 w-24 shrink-0 rounded-[10px] border-3 border-outline object-cover max-md:h-20 max-md:w-30 max-md:rounded-sm" />
             <span className="flex flex-col gap-0.5 max-md:hidden">
               <span className="font-display text-title-2">Find this country</span>
-              <span className="text-body font-bold text-fg-muted max-md:hidden">
-                {view === 'globe' ? 'Tap it on the globe. Drag to spin.' : 'Tap it on the map. Drag to move.'}
-              </span>
             </span>
           </div>
         </div>
