@@ -352,14 +352,14 @@ export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactN
               </span>
             </output>
           )}
-          <div className={`flex items-center gap-4 rounded-lg border-3 border-outline bg-surface px-[18px] py-3.5 shadow-drop-lg ${feedback ? 'max-md:hidden' : ''}`}>
-            <img src={flagUrl(target.code)} alt="Flag to find" className="block h-16 w-24 shrink-0 rounded-[10px] border-3 border-outline object-cover" />
-            <span className="flex flex-col gap-0.5">
+          {/* On phones the card is just the flag, centred; the alt text carries the instruction. */}
+          <div className={`flex items-center gap-4 rounded-lg border-3 border-outline bg-surface px-[18px] py-3.5 shadow-drop-lg max-md:self-center max-md:p-2.5 ${feedback ? 'max-md:hidden' : ''}`}>
+            <img src={flagUrl(target.code)} alt="Find the country with this flag" className="block h-16 w-24 shrink-0 rounded-[10px] border-3 border-outline object-cover max-md:h-20 max-md:w-30 max-md:rounded-sm" />
+            <span className="flex flex-col gap-0.5 max-md:hidden">
               <span className="font-display text-title-2">Find this country</span>
               <span className="text-body font-bold text-fg-muted max-md:hidden">
                 {view === 'globe' ? 'Tap it on the globe. Drag to spin.' : 'Tap it on the map. Drag to move.'}
               </span>
-              <span className="text-body font-bold text-fg-muted md:hidden">Pinch to zoom, then tap.</span>
             </span>
           </div>
         </div>

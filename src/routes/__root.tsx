@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { HeadContent, Link, Outlet, Scripts, createRootRoute } from '@tanstack/react-router';
 import appCss from '../styles.css?url';
 import { ThemeToggle, themeInitScript } from '../ThemeToggle';
+import { CompassIcon, NavMenu, TargetIcon } from '../NavMenu';
 
 export const Route = createRootRoute({
   head: () => ({
@@ -33,16 +34,6 @@ function FlagIcon() {
   );
 }
 
-function MapIcon() {
-  return (
-    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z" />
-      <path d="M9 4v14" />
-      <path d="M15 6v14" />
-    </svg>
-  );
-}
-
 function RootLayout() {
   return (
     // `group/app` lets the phone chrome hide itself while a game is being played.
@@ -55,12 +46,18 @@ function RootLayout() {
           <span>Flag Map<span className="max-md:hidden"> of the World</span></span>
         </h1>
         <nav aria-label="Main" className="flex gap-2 rounded-pill bg-surface-sunk p-1.5 max-md:hidden">
-          <Link to="/country" className={NAV_LINK} activeProps={{ className: 'bg-ocean-500 text-on-ocean' }}>
-            <MapIcon />Country
+          <Link to="/country/discover" className={NAV_LINK} activeProps={{ className: 'bg-ocean-500 text-on-ocean' }}>
+            <CompassIcon />Discover
+          </Link>
+          <Link to="/country/games" className={NAV_LINK} activeProps={{ className: 'bg-ocean-500 text-on-ocean' }}>
+            <TargetIcon />Games
           </Link>
         </nav>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
+          {/* Desktop: Flag Hunt portals its score chips here while a game is being played. */}
+          <div id="game-hud" className="contents max-md:hidden" />
           <ThemeToggle />
+          <NavMenu />
         </div>
       </header>
       <Outlet />

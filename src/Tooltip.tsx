@@ -53,15 +53,12 @@ export function CountryCard({ country, onClose }: { country: CountryProps | null
   return (
     <output className="absolute inset-x-3 bottom-4 z-3 flex items-center gap-3 rounded-lg border-3 border-outline bg-surface p-3.5 font-body text-fg shadow-drop-lg">
       {code && <img src={flagUrl(code)} alt="" className="block h-16 w-24 shrink-0 rounded-[10px] border-3 border-outline object-cover" />}
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="font-display text-title-2">{name}</span>
-        <span className="text-caption text-fg-muted">Tap another country to see its flag.</span>
-      </span>
+      <span className="min-w-0 flex-1 font-display text-title-2">{name}</span>
       <button
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="grid size-tap-min shrink-0 cursor-pointer place-items-center self-start rounded-md border-3 border-outline bg-surface p-0 text-fg shadow-drop-sm transition-transform duration-(--dur-tap) active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500"
+        className="grid size-tap-min shrink-0 cursor-pointer place-items-center rounded-md border-3 border-outline bg-surface p-0 text-fg shadow-drop-sm transition-transform duration-(--dur-tap) active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500"
       >
         <XIcon />
       </button>
