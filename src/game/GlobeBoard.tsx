@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
@@ -48,6 +48,7 @@ export function GlobeBoard({ world, paints, focus, onPick }: BoardProps) {
   const [painter, setPainter] = useState<GamePainter | null>(null);
   const painted = useRef(new Map<Country, Paint>());
   const [outline, setOutline] = useState('');
+  const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
 
   // The theme lives on <html data-theme>, or follows the device when unset.
   useEffect(() => {
@@ -94,6 +95,15 @@ export function GlobeBoard({ world, paints, focus, onPick }: BoardProps) {
     if (clicked) onPick(clicked, lonLat);
   };
 
+  // On touch the globe turns with the finger at every zoom; OrbitControls
+  // otherwise spins the same angle per swipe however close the camera is.
+  const followFinger = () => {
+    const c = controls.current;
+    if (!c || !window.matchMedia('(hover: none)').matches) return;
+    // 22.5° is half the camera fov.
+    c.rotateSpeed = (c.object.position.length() - 1) * Math.tan(THREE.MathUtils.degToRad(22.5)) / Math.PI;
+  };
+
   return (
     // flat + unlit: the sticker look, with token colours shown as-is.
     <Canvas flat camera={{ position: [0, 0, 3], fov: 45 }}>
@@ -111,7 +121,7 @@ export function GlobeBoard({ world, paints, focus, onPick }: BoardProps) {
           </mesh>
         </>
       )}
-      <OrbitControls makeDefault enablePan={false} minDistance={1.2} maxDistance={6} zoomSpeed={0.6} />
+      <OrbitControls ref={controls} makeDefault enablePan={false} minDistance={1.2} maxDistance={6} zoomSpeed={0.6} onStart={followFinger} onChange={followFinger} />
       <CameraRig focus={focus} />
     </Canvas>
   );

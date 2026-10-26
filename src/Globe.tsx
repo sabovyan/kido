@@ -142,6 +142,15 @@ export function Globe() {
     c.update();
   };
 
+  // On touch the globe turns with the finger at every zoom; OrbitControls
+  // otherwise spins the same angle per swipe however close the camera is.
+  const followFinger = () => {
+    const c = controls.current;
+    if (!c || !window.matchMedia('(hover: none)').matches) return;
+    // 22.5° is half the camera fov.
+    c.rotateSpeed = (c.object.position.length() - 1) * Math.tan(THREE.MathUtils.degToRad(22.5)) / Math.PI;
+  };
+
   return (
     <>
       {!texture && <div className="pointer-events-none absolute inset-0 grid place-items-center font-body text-body-lg text-fg">Loading flags…</div>}
@@ -161,7 +170,7 @@ export function Globe() {
             </mesh>
           </>
         )}
-        <OrbitControls ref={controls} enablePan={false} minDistance={1.2} maxDistance={6} zoomSpeed={0.6} />
+        <OrbitControls ref={controls} enablePan={false} minDistance={1.2} maxDistance={6} zoomSpeed={0.6} onStart={followFinger} onChange={followFinger} />
       </Canvas>
       <Tooltip tip={tip} />
       <ZoomButtons onZoom={zoomBy} />
