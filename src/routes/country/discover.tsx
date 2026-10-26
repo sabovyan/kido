@@ -20,8 +20,8 @@ function CountryDiscover() {
   const isGlobe = view === 'globe';
 
   return (
-    <div className="box-border h-full bg-page px-6 pb-6 max-md:p-0">
-      <div className={`relative box-border h-full overflow-hidden rounded-lg border-3 border-outline max-md:rounded-none max-md:border-0 ${isGlobe ? 'bg-backdrop' : 'bg-map-sea'}`}>
+    <div className="box-border h-full bg-page">
+      <div className={`relative box-border h-full overflow-hidden ${isGlobe ? 'bg-backdrop' : 'bg-map-sea'}`}>
         <nav aria-label="View" className="absolute top-4 left-4 z-3 inline-flex gap-1 rounded-md border-3 border-outline bg-surface p-1 shadow-drop-sm">
           <Link from={Route.fullPath} search={{}} activeProps={{}} aria-current={isGlobe ? undefined : 'page'} className={isGlobe ? UNSELECTED : SELECTED}>Map</Link>
           <Link from={Route.fullPath} search={{ view: 'globe' }} activeProps={{}} aria-current={isGlobe ? 'page' : undefined} className={isGlobe ? SELECTED : UNSELECTED}>Globe</Link>
