@@ -9,7 +9,7 @@ import type { Focus } from './board';
 import { FlagJigsaw } from './FlagJigsaw';
 import { FlatBoard } from './FlatBoard';
 import { GlobeBoard } from './GlobeBoard';
-import { type Asked, BATCH, buildQuestions, dueTargets, levelAfter, levelOf, pickSession, type Progress, readProgress, schedule, sessionExtras, shuffle } from './learnSession';
+import { type Asked, BATCH, buildQuestions, dueTargets, levelAfter, levelOf, loadProgress, pickCodes, pickSession, type Progress, saveProgress, schedule, SESSION_MAX, sessionExtras, shuffle } from './learnSession';
 import { MemoryMatch } from './MemoryMatch';
 import type { Paint } from './painter';
 import { FLAG_RECOGNITION } from './recognition';
@@ -32,7 +32,6 @@ type Question = Asked<Target>;
 
 // The quick check keeps asking new flags until the session's new ones are unknown, up to this many.
 const MAX_CHECKS = 8;
-const STORAGE_KEY = 'flag-map:learn';
 // ~5,000 km², in steradians. Same cut as Flag Hunt's Easy mode.
 const EASY_MIN_AREA = 5_000 / 40_589_000;
 
@@ -120,22 +119,6 @@ function knownPaints(order: Target[], progress: Progress, skip: Set<string>) {
   return paints;
 }
 
-function loadProgress(): Progress {
-  try {
-    return readProgress(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}'), Date.now());
-  } catch {
-    return {};
-  }
-}
-
-function saveProgress(progress: Progress) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
-  } catch {
-    // Storage blocked: progress lasts for this visit only.
-  }
-}
-
 const countries = (n: number) => (n === 1 ? 'country' : 'countries');
 const flags = (n: number) => (n === 1 ? 'flag' : 'flags');
 
@@ -221,7 +204,10 @@ function LevelChip({ level }: { level: number }) {
   );
 }
 
-export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: ReactNode }) {
+const NO_CODES: string[] = [];
+
+// `codes`: countries sent from Flag Hunt's "Learn these", learned before anything else.
+export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView; viewSwitch?: ReactNode; codes?: string[] }) {
   const [world, setWorld] = useState<World | null>(null);
   const [homeCode, setHomeCode] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress>({});
@@ -249,7 +235,11 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [paints, setPaints] = useState<Map<Country, Paint>>(new Map());
   const [focus, setFocus] = useState<Focus | null>(null);
+  // Flag Hunt's countries, until their session starts.
+  const [huntCodes, setHuntCodes] = useState(codes);
   const timer = useRef<number>(undefined);
+
+  useEffect(() => setHuntCodes(codes), [codes]);
 
   useEffect(() => {
     let cancelled = false;
@@ -265,6 +255,10 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
 
   const order = useMemo(() => (world ? learnOrder(buildTargets(world), homeCode) : []), [world, homeCode]);
   const batch = useMemo(() => nextBatch(order, progress, Date.now()), [order, progress]);
+  const hunt = useMemo(() => pickCodes(order, huntCodes), [order, huntCodes]);
+  // While the map loads the codes can't be checked yet, so the card waits with them.
+  const showHunt = huntCodes.length > 0 && (!world || hunt.length > 0);
+  const huntSize = world ? hunt.length : Math.min(huntCodes.length, SESSION_MAX);
   const counts = useMemo(() => {
     const c = [0, 0, 0, 0];
     for (const t of order) c[levelOf(progress, t.code)]++;
@@ -362,6 +356,18 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
     setCheckIndex(0);
     setPaints(knownPaints(order, progress, new Set(r.map(t => t.code))));
     setPhase('check');
+  };
+
+  // From Flag Hunt: no quick check, every country is met, built, matched and found.
+  const startHunt = () => {
+    window.clearTimeout(timer.current);
+    setFeedback(null);
+    setReview([]);
+    setKnew([]);
+    setUnknown([]);
+    setHuntCodes([]);
+    setPaints(knownPaints(order, progress, new Set(hunt.map(t => t.code))));
+    beginLearning(hunt, [], []);
   };
 
   // A flag the kid already knows becomes Known and the check asks one more;
@@ -628,7 +634,42 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
         </div>
       )}
 
-      {phase === 'start' && (
+      {phase === 'start' && showHunt && (
+        <div className="absolute inset-0 z-2 grid place-items-center bg-scrim p-4 max-md:grid-cols-1">
+          <section className="box-border flex w-[560px] max-w-full flex-col gap-[18px] rounded-lg border-3 border-outline bg-surface p-7 text-fg shadow-drop-lg max-md:max-h-full max-md:gap-4 max-md:overflow-y-auto max-md:p-5">
+            <div className="flex flex-col gap-1.5 text-center">
+              <h2 className="m-0 font-display text-title-1">Learn {huntSize === 1 ? 'this flag' : 'these flags'}</h2>
+              <p className="m-0 text-body-lg text-fg-muted">
+                From your Flag Hunt. Meet {huntSize === 1 ? 'it' : 'them'}, build {huntSize === 1 ? 'it' : 'them'}{huntSize > 1 ? ', play a memory game' : ''} and find {huntSize === 1 ? 'it' : 'them'} on the {board}.
+              </p>
+              {!world && <p className="m-0 text-body text-fg-muted">Loading map…</p>}
+            </div>
+            {viewSwitch && (
+              <div className="flex items-center justify-center gap-3 md:hidden">
+                <span className="text-label">Learn on</span>
+                {viewSwitch}
+              </div>
+            )}
+            <ul className="m-0 flex list-none flex-col gap-2 p-0 text-left">
+              {hunt.map(t => (
+                <li key={t.code} className="flex items-center gap-3 rounded-md border-3 border-outline bg-surface-sunk px-3 py-2">
+                  <img src={flagUrl(t.code)} alt="" className="block h-10 w-15 shrink-0 rounded-sm border-2 border-outline object-cover" />
+                  <span className="min-w-0 flex-1 text-body font-bold">{t.name}</span>
+                  <LevelChip level={levelOf(progress, t.code)} />
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap justify-center gap-3 max-md:flex-col">
+              <button type="button" disabled={!world} className={MAIN_BUTTON} onClick={startHunt}>
+                Start learning <ArrowRightIcon />
+              </button>
+              <button type="button" className={`${OTHER_BUTTON} cursor-pointer`} onClick={() => setHuntCodes([])}>Not now</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {phase === 'start' && !showHunt && (
         <div className="absolute inset-0 z-2 grid place-items-center bg-scrim p-4 max-md:grid-cols-1">
           <section className="box-border flex w-[640px] max-w-full flex-col gap-[18px] rounded-lg border-3 border-outline bg-surface p-7 text-fg shadow-drop-lg max-md:max-h-full max-md:gap-4 max-md:overflow-y-auto max-md:p-5">
             <div className="flex flex-col gap-1.5 text-center">

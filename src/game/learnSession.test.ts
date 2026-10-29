@@ -4,8 +4,11 @@ import {
   buildQuestions,
   type Card,
   dueTargets,
+  huntMiss,
   levelAfter,
   MAX_EXTRAS,
+  parseCodes,
+  pickCodes,
   pickSession,
   readProgress,
   schedule,
@@ -197,5 +200,47 @@ describe('pickSession', () => {
     const { fresh: f, reviews } = pickSession(c('d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7'), []);
     expect(f).toEqual([]);
     expect(reviews).toHaveLength(SESSION_MAX);
+  });
+});
+
+describe('huntMiss', () => {
+  it('drops a known country to Met and makes it due now', () => {
+    const progress = { fr: { level: 3, lastSeen: day(1), due: day(20) } };
+    expect(huntMiss(progress, 'fr', NOW)).toEqual({ fr: { level: 1, lastSeen: NOW, due: NOW } });
+  });
+
+  it('makes a Met country due now', () => {
+    const progress = { fr: { level: 1, lastSeen: day(1), due: day(30) } };
+    expect(huntMiss(progress, 'fr', NOW).fr).toEqual({ level: 1, lastSeen: NOW, due: NOW });
+  });
+
+  it('leaves a new country new, and other countries as they were', () => {
+    const progress = { de: { level: 2, lastSeen: day(1), due: day(4) } };
+    expect(huntMiss(progress, 'fr', NOW)).toBe(progress);
+    expect(huntMiss({}, 'fr', NOW)).toEqual({});
+  });
+});
+
+describe('parseCodes', () => {
+  it('reads lowercase codes in order, each once', () => {
+    expect(parseCodes('FR, de,fr,gb-eng')).toEqual(['fr', 'de', 'gb-eng']);
+  });
+
+  it('drops junk and anything that is not a string', () => {
+    expect(parseCodes('fr,,x,123,<b>')).toEqual(['fr']);
+    expect(parseCodes(undefined)).toEqual([]);
+    expect(parseCodes(42)).toEqual([]);
+  });
+});
+
+describe('pickCodes', () => {
+  const all = c('fr', 'de', 'it', 'es', 'jp', 'ca', 'br', 'us');
+
+  it('keeps the order of the codes and skips unknown ones', () => {
+    expect(codes(pickCodes(all, ['jp', 'zz', 'fr']))).toEqual(['jp', 'fr']);
+  });
+
+  it('takes SESSION_MAX at most', () => {
+    expect(codes(pickCodes(all, ['us', 'br', 'ca', 'jp', 'es', 'it', 'de']))).toEqual(['us', 'br', 'ca', 'jp', 'es', 'it']);
   });
 });

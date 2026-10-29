@@ -109,3 +109,43 @@ export function levelAfter(level: number, kind: Kind, ok: boolean, repeat = fals
   // Picking the flag is the easy step for a new country; for a known one it means mastered.
   return level >= 2 ? 3 : Math.max(level, 1);
 }
+
+// A miss in Flag Hunt counts like a Learn miss: a country met before drops to Met and is due
+// now. New ones stay new, so Learn still meets them first. Right answers change nothing: one
+// lucky tap in a game shouldn't skip meeting a country.
+export function huntMiss(progress: Progress, code: string, now: number): Progress {
+  const level = levelOf(progress, code);
+  if (!level) return progress;
+  return { ...progress, [code]: schedule(progress[code], levelAfter(level, 'flag', false), false, now) };
+}
+
+// The `codes` search param ("fr,de"): lowercase flag codes, each once, in order.
+export function parseCodes(param: unknown) {
+  if (typeof param !== 'string') return [];
+  const codes = param.toLowerCase().split(',').map(c => c.trim()).filter(c => /^[a-z]{2}(-[a-z]+)?$/.test(c));
+  return [...new Set(codes)];
+}
+
+// The countries with these codes, in the codes' order, SESSION_MAX at most (the memory game's limit).
+export function pickCodes<T extends { code: string }>(items: T[], codes: string[]) {
+  return codes.flatMap(code => items.filter(t => t.code === code)).slice(0, SESSION_MAX);
+}
+
+// Saved progress, shared by Learn and Flag Hunt.
+const STORAGE_KEY = 'flag-map:learn';
+
+export function loadProgress(): Progress {
+  try {
+    return readProgress(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}'), Date.now());
+  } catch {
+    return {};
+  }
+}
+
+export function saveProgress(progress: Progress) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+  } catch {
+    // Storage blocked: progress lasts for this visit only.
+  }
+}

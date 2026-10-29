@@ -1,11 +1,13 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from '@tanstack/react-router';
 import * as d3 from 'd3';
 import type { Polygon } from 'geojson';
 import { flagUrl, loadUserCountry, loadWorld, type Country, type World } from '../countries';
 import type { Focus } from './board';
 import { FlatBoard } from './FlatBoard';
 import { GlobeBoard } from './GlobeBoard';
+import { huntMiss, loadProgress, saveProgress } from './learnSession';
 import type { Paint } from './painter';
 import { FLAG_RECOGNITION } from './recognition';
 
@@ -78,6 +80,7 @@ function formatPercent(share: number) {
 const BUTTON = 'inline-flex h-tap-main items-center gap-2.5 rounded-md border-3 border-outline px-7 font-display text-title-2 shadow-drop-md transition-transform duration-(--dur-tap) hover:-translate-y-0.5 active:translate-y-[5px] active:shadow-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 max-md:box-border max-md:w-full max-md:justify-center';
 const MAIN_BUTTON = `${BUTTON} bg-sun-400 text-on-sun active:bg-sun-600`;
 const OTHER_BUTTON = `${BUTTON} bg-surface text-fg`;
+const SMALL_BUTTON = 'inline-flex h-tap-min shrink-0 items-center gap-2 self-center rounded-md border-3 border-outline bg-surface px-5 font-display text-title-3 text-fg no-underline shadow-drop-sm transition-transform duration-(--dur-tap) active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 max-md:box-border max-md:w-full max-md:justify-center';
 
 // Stable keys for the heart and star rows.
 const HEARTS = Array.from({ length: LIVES }, (_, i) => `heart-${i}`);
@@ -282,6 +285,10 @@ export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactN
       setFocus({ lonLat: target.center, features: target.features, id: Date.now() });
       setLives(livesLeft);
       setMissed(m => [...m, target]);
+      // Learn brings the country back for practice. Read fresh, so Learn's latest save is kept.
+      const progress = loadProgress();
+      const after = huntMiss(progress, target.code, Date.now());
+      if (after !== progress) saveProgress(after);
       setStreak(0);
       setFeedback({
         ok: false,
@@ -437,7 +444,17 @@ export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactN
                 {outOfHearts ? 'Nice try! ' : ''}You found <b className="tabular-nums">{collected.size}</b> of <b className="tabular-nums">{queue.length}</b> flags{perfect ? '. Amazing!' : '.'}
               </p>
               {missed.length > 0 && (
-                <p className="m-0 text-body text-fg-muted">Try these next time: {listNames(missed)}</p>
+                <>
+                  <p className="m-0 text-body text-fg-muted">Try these next time: {listNames(missed)}</p>
+                  {/* Learn takes the first 6 (its memory game's limit). */}
+                  <Link
+                    to="/country/learn"
+                    search={{ ...(view === 'map' ? { view: 'map' } : {}), codes: missed.map(t => t.code).join(',') }}
+                    className={SMALL_BUTTON}
+                  >
+                    Learn {missed.length === 1 ? 'this one' : 'these'} <ArrowRightIcon />
+                  </Link>
+                </>
               )}
               <div className="flex flex-wrap justify-center gap-2 text-caption tabular-nums">
                 <span className="rounded-pill border-2 border-outline bg-tint-hint px-3 py-1.5 text-on-tint-hint">{score} points</span>
