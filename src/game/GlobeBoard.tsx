@@ -6,6 +6,7 @@ import { OrbitControls } from '@react-three/drei';
 import type { Country } from '../countries';
 import { fingerRotateSpeed, mouseRotateSpeed } from '../globeRotate';
 import type { BoardProps, Focus } from './board';
+import { focusDistance, mainlandRadius } from './globeZoom';
 import { GamePainter, type Paint } from './painter';
 
 // Matches three.js SphereGeometry UVs for an equirectangular texture.
@@ -14,29 +15,57 @@ function lonLatToVec([lon, lat]: [number, number]) {
   return new THREE.Vector3(Math.cos(φ) * Math.cos(λ), Math.sin(φ), -Math.cos(φ) * Math.sin(λ));
 }
 
-function CameraRig({ focus }: { focus: Focus | null }) {
-  const camera = useThree(s => s.camera);
+type Flight = { from: THREE.Vector3; rot: THREE.Quaternion; d0: number; d1: number; t: number; duration: number };
+
+// Matches the OrbitControls limit below.
+const MIN_DISTANCE = 1.2;
+
+// Turns the camera to look at `to` from `distance`: flies over --dur-fly, or jumps under reduced motion.
+function flight(camera: THREE.Camera, to: THREE.Vector3, distance: number): Flight {
+  const from = camera.position.clone().normalize();
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const fly = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dur-fly')) / 1000 || 1.2;
+  return {
+    from,
+    rot: new THREE.Quaternion().setFromUnitVectors(from, to),
+    d0: camera.position.length(),
+    d1: distance,
+    t: 0,
+    duration: still ? 0 : fly,
+  };
+}
+
+// Turns to the focused country and comes in close enough for a small one to be easy to tap.
+// `held` is whether that country is still painted; once it isn't (or focus clears),
+// the camera eases back out to where it was before zooming in.
+function CameraRig({ focus, held }: { focus: Focus | null; held: boolean }) {
+  const camera = useThree(s => s.camera) as THREE.PerspectiveCamera;
   const controls = useThree(s => s.controls) as unknown as { update(): void } | null;
-  const anim = useRef<{ from: THREE.Vector3; rot: THREE.Quaternion; dist: number; t: number } | null>(null);
+  const anim = useRef<Flight | null>(null);
+  // Distance to ease back out to; null while not zoomed in on a focus.
+  const home = useRef<number | null>(null);
 
   useEffect(() => {
     if (!focus) return;
-    const from = camera.position.clone().normalize();
-    const to = lonLatToVec(focus.lonLat);
-    anim.current = {
-      from,
-      rot: new THREE.Quaternion().setFromUnitVectors(from, to),
-      dist: camera.position.length(),
-      t: 0,
-    };
+    // Chained focuses keep the first one's home; a flight back out still going is headed there too.
+    home.current ??= anim.current?.d1 ?? camera.position.length();
+    const fit = focusDistance(mainlandRadius(focus.lonLat, focus.features), camera.fov, camera.aspect);
+    anim.current = flight(camera, lonLatToVec(focus.lonLat), Math.max(MIN_DISTANCE, Math.min(fit, home.current)));
   }, [focus, camera]);
+
+  useEffect(() => {
+    if (held || home.current === null) return;
+    anim.current = flight(camera, camera.position.clone().normalize(), home.current);
+    home.current = null;
+  }, [held, camera]);
 
   useFrame((_, dt) => {
     const a = anim.current;
     if (!a) return;
-    a.t = Math.min(1, a.t + dt / 1.2);
-    const q = new THREE.Quaternion().slerp(a.rot, d3.easeCubicInOut(a.t));
-    camera.position.copy(a.from).applyQuaternion(q).multiplyScalar(a.dist);
+    a.t = a.duration ? Math.min(1, a.t + dt / a.duration) : 1;
+    const e = d3.easeCubicInOut(a.t);
+    const q = new THREE.Quaternion().slerp(a.rot, e);
+    camera.position.copy(a.from).applyQuaternion(q).multiplyScalar(a.d0 + (a.d1 - a.d0) * e);
     camera.lookAt(0, 0, 0);
     controls?.update();
     if (a.t === 1) anim.current = null;
@@ -88,6 +117,8 @@ export function GlobeBoard({ world, paints, focus, onPick }: BoardProps) {
     painted.current = new Map(paints);
   }, [painter, paints]);
 
+  const held = !!focus && focus.features.some(f => (paints.get(f) ?? 'blank') !== 'blank');
+
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     // Ignore the click that ends a drag-to-rotate.
     if (e.delta > 6 || !e.uv) return;
@@ -124,8 +155,8 @@ export function GlobeBoard({ world, paints, focus, onPick }: BoardProps) {
           </mesh>
         </>
       )}
-      <OrbitControls ref={controls} makeDefault enablePan={false} minDistance={1.2} maxDistance={6} zoomSpeed={0.6} onStart={scaleRotate} onChange={scaleRotate} />
-      <CameraRig focus={focus} />
+      <OrbitControls ref={controls} makeDefault enablePan={false} minDistance={MIN_DISTANCE} maxDistance={6} zoomSpeed={0.6} onStart={scaleRotate} onChange={scaleRotate} />
+      <CameraRig focus={focus} held={held} />
     </Canvas>
   );
 }
