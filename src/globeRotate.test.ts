@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fingerRotateSpeed, mouseRotateSpeed } from './globeRotate';
+import { fingerRotateSpeed, mouseRotateSpeed, TOUCH_GAIN } from './globeRotate';
 
 // What OrbitControls does with rotateSpeed: the angle turned for a drag of dx px.
 const turnFor = (dx: number, height: number, speed: number) => (2 * Math.PI * dx * speed) / height;
@@ -14,13 +14,13 @@ describe('fingerRotateSpeed', () => {
     [1.2, 45, 740], // fully zoomed in
     [6, 45, 740], // fully zoomed out
     [3, 60, 400], // other fov and canvas size
-  ])('moves the surface as far as the finger (distance %d, fov %d, height %d)', (distance, fov, height) => {
+  ])('moves the surface TOUCH_GAIN times as far as the finger (distance %d, fov %d, height %d)', (distance, fov, height) => {
     const speed = fingerRotateSpeed(distance, fov);
-    expect(surfaceMove(turnFor(60, height, speed), height, distance, fov)).toBeCloseTo(60, 6);
+    expect(surfaceMove(turnFor(60, height, speed), height, distance, fov)).toBeCloseTo(60 * TOUCH_GAIN, 6);
   });
 
-  it('is about 0.26 at the default distance of 3 with a 45° fov', () => {
-    expect(fingerRotateSpeed(3, 45)).toBeCloseTo(0.2637, 4);
+  it('is about 0.66 at the default distance of 3 with a 45° fov', () => {
+    expect(fingerRotateSpeed(3, 45)).toBeCloseTo(0.6592, 4);
   });
 
   it('slows down as the camera gets closer', () => {

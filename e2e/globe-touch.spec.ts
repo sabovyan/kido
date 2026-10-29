@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { TOUCH_GAIN } from '../src/globeRotate';
 import { horizontalShift, openGlobe, settledShot } from './globe';
 
-test('a touch drag moves the globe about as far as the finger', async ({ page }) => {
+test('a touch drag moves the globe about TOUCH_GAIN times as far as the finger', async ({ page }) => {
   expect(await page.evaluate(() => matchMedia('(hover: none)').matches), 'device should count as touch').toBe(true);
   const band = await openGlobe(page);
   const before = await settledShot(page, band);
@@ -16,7 +17,7 @@ test('a touch drag moves the globe about as far as the finger', async ({ page })
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 
   const shift = await horizontalShift(page, before, await settledShot(page, band));
-  // Before the fix the surface ran ~2.5x ahead of the finger.
-  expect(shift).toBeLessThan(-dx * 0.5);
-  expect(shift).toBeGreaterThan(-dx * 1.3);
+  // The surface runs TOUCH_GAIN times ahead of the finger.
+  expect(shift).toBeLessThan(-dx * TOUCH_GAIN * 0.7);
+  expect(shift).toBeGreaterThan(-dx * TOUCH_GAIN * 1.3);
 });

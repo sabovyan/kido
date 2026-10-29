@@ -1,8 +1,12 @@
+// Exact 1:1 tracking felt sluggish on a narrow phone screen (a full-width
+// swipe turned only ~50°), so touch moves the surface this many times the finger.
+export const TOUCH_GAIN = 2.5;
+
 // OrbitControls turns the camera 2π·rotateSpeed per canvas height dragged,
 // however close it is. This speed makes the globe's surface (radius 1) under
-// the middle of the screen move exactly as far as the finger.
+// the middle of the screen move TOUCH_GAIN times as far as the finger.
 export function fingerRotateSpeed(distance: number, fov: number) {
-  return (distance - 1) * Math.tan((fov * Math.PI) / 360) / Math.PI;
+  return (TOUCH_GAIN * (distance - 1) * Math.tan((fov * Math.PI) / 360)) / Math.PI;
 }
 
 // A mouse keeps OrbitControls' default speed at the starting distance and
