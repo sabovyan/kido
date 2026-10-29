@@ -9,7 +9,7 @@ import type { Focus } from './board';
 import { FlagJigsaw } from './FlagJigsaw';
 import { FlatBoard } from './FlatBoard';
 import { GlobeBoard } from './GlobeBoard';
-import { type Asked, buildQuestions, levelAfter, sessionExtras, shuffle } from './learnSession';
+import { type Asked, BATCH, buildQuestions, dueTargets, levelAfter, levelOf, pickSession, type Progress, readProgress, schedule, sessionExtras, shuffle } from './learnSession';
 import { MemoryMatch } from './MemoryMatch';
 import type { Paint } from './painter';
 import { FLAG_RECOGNITION } from './recognition';
@@ -18,8 +18,6 @@ import { FLAG_RECOGNITION } from './recognition';
 // country in the session, then practice on the map.
 type Phase = 'start' | 'check' | 'meet' | 'build' | 'match' | 'practice' | 'done';
 type Feedback = { tone: 'correct' | 'oops' | 'hint'; title: string; detail: string };
-// Sticker level per flag code: 0 new, 1 met, 2 known, 3 mastered.
-type Progress = Record<string, number>;
 export type LearnView = 'map' | 'globe';
 
 type Target = {
@@ -32,9 +30,7 @@ type Target = {
 
 type Question = Asked<Target>;
 
-const BATCH = 4;
-const REVIEWS = 2;
-// The quick check keeps asking new flags until BATCH are unknown, up to this many.
+// The quick check keeps asking new flags until the session's new ones are unknown, up to this many.
 const MAX_CHECKS = 8;
 const STORAGE_KEY = 'flag-map:learn';
 // ~5,000 km², in steradians. Same cut as Flag Hunt's Easy mode.
@@ -98,14 +94,12 @@ function learnOrder(targets: Target[], homeCode: string | null) {
     || b.area - a.area);
 }
 
-// The next new countries, plus a few met ones that need practice (lowest level first).
-function nextBatch(order: Target[], progress: Progress) {
-  const fresh = order.filter(t => !progress[t.code]).slice(0, BATCH);
-  const review = order
-    .filter(t => (progress[t.code] ?? 0) > 0 && progress[t.code] < 3)
-    .sort((a, b) => progress[a.code] - progress[b.code])
-    .slice(0, fresh.length ? REVIEWS : BATCH + REVIEWS);
-  return { fresh, review };
+// Countries due for practice first, then the next new ones. `due` counts every due country,
+// also the ones that wait for a later session.
+function nextBatch(order: Target[], progress: Progress, now: number) {
+  const due = dueTargets(order, progress, now);
+  const { fresh, reviews } = pickSession(due, order.filter(t => !levelOf(progress, t.code)));
+  return { fresh, review: reviews, due: due.length };
 }
 
 // Two other flags from countries of about the same fame.
@@ -120,7 +114,7 @@ function flagChoices(order: Target[], target: Target) {
 function knownPaints(order: Target[], progress: Progress, skip: Set<string>) {
   const paints = new Map<Country, Paint>();
   for (const t of order) {
-    if (skip.has(t.code) || (progress[t.code] ?? 0) < 2) continue;
+    if (skip.has(t.code) || levelOf(progress, t.code) < 2) continue;
     for (const f of t.features) paints.set(f, 'flag');
   }
   return paints;
@@ -128,7 +122,7 @@ function knownPaints(order: Target[], progress: Progress, skip: Set<string>) {
 
 function loadProgress(): Progress {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') ?? {};
+    return readProgress(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}'), Date.now());
   } catch {
     return {};
   }
@@ -143,6 +137,7 @@ function saveProgress(progress: Progress) {
 }
 
 const countries = (n: number) => (n === 1 ? 'country' : 'countries');
+const flags = (n: number) => (n === 1 ? 'flag' : 'flags');
 
 function withPaint(paints: Map<Country, Paint>, features: Country[], paint: Paint | null) {
   const next = new Map(paints);
@@ -235,6 +230,8 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
   // Quick check: new countries in order, how many of them get asked, and the answers so far.
   const [candidates, setCandidates] = useState<Target[]>([]);
   const [checkCount, setCheckCount] = useState(0);
+  // How many unknown flags the check looks for: this session's new countries.
+  const [checkGoal, setCheckGoal] = useState(0);
   const [checkIndex, setCheckIndex] = useState(0);
   const [unknown, setUnknown] = useState<Target[]>([]);
   const [knew, setKnew] = useState<Target[]>([]);
@@ -267,10 +264,10 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
   }, []);
 
   const order = useMemo(() => (world ? learnOrder(buildTargets(world), homeCode) : []), [world, homeCode]);
-  const batch = useMemo(() => nextBatch(order, progress), [order, progress]);
+  const batch = useMemo(() => nextBatch(order, progress, Date.now()), [order, progress]);
   const counts = useMemo(() => {
     const c = [0, 0, 0, 0];
-    for (const t of order) c[progress[t.code] ?? 0]++;
+    for (const t of order) c[levelOf(progress, t.code)]++;
     return c;
   }, [order, progress]);
 
@@ -292,9 +289,10 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
   }, [question]);
 
   // Functional, so a level set from a timer doesn't drop one set just before.
-  const setLevel = (code: string, level: number) => {
+  // Also moves the country's next practice day (see `schedule`).
+  const setLevel = (code: string, level: number, ok = true) => {
     setProgress(p => {
-      const next = { ...p, [code]: level };
+      const next = { ...p, [code]: schedule(p[code], level, ok, Date.now()) };
       saveProgress(next);
       return next;
     });
@@ -357,9 +355,10 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
       beginLearning([], r, []);
       return;
     }
-    const pool = order.filter(t => !progress[t.code]);
+    const pool = order.filter(t => !levelOf(progress, t.code));
     setCandidates(pool);
-    setCheckCount(Math.min(BATCH, pool.length));
+    setCheckGoal(f.length);
+    setCheckCount(Math.min(f.length, pool.length));
     setCheckIndex(0);
     setPaints(knownPaints(order, progress, new Set(r.map(t => t.code))));
     setPhase('check');
@@ -382,7 +381,7 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
     setFeedback(ok ? { tone: 'correct', title: `Yes! You know ${t.name}`, detail: 'No need to learn it again.' } : (miss ?? null));
     timer.current = window.setTimeout(() => {
       setFeedback(null);
-      if (missed.length >= BATCH || checkIndex + 1 >= count) beginLearning(missed, review, known);
+      if (missed.length >= checkGoal || checkIndex + 1 >= count) beginLearning(missed, review, known);
       else setCheckIndex(checkIndex + 1);
     }, ok ? 1200 : 1500);
   };
@@ -391,7 +390,7 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
   const nextMeet = () => {
     window.clearTimeout(timer.current);
     const t = fresh[meetIndex];
-    setLevel(t.code, Math.max(progress[t.code] ?? 0, 1));
+    setLevel(t.code, Math.max(levelOf(progress, t.code), 1));
     setFeedback(null);
     setPhase('build');
   };
@@ -426,9 +425,9 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
   const answer = (ok: boolean, wrongName: string, clicked?: Country) => {
     if (!question) return;
     const { target: t, kind } = question;
-    const before = progress[t.code] ?? 0;
+    const before = levelOf(progress, t.code);
     const level = levelAfter(before, kind, ok, repeats.has(t.code));
-    setLevel(t.code, level);
+    setLevel(t.code, level, ok);
 
     if (ok) {
       const askedAgain = questions.slice(index + 1).some(q => q.target === t);
@@ -655,9 +654,9 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
                 ))}
               </div>
             )}
-            {batch.review.length > 0 && (
-              <p className="m-0 text-center text-body text-fg-muted">
-                {batch.fresh.length ? `Plus ${batch.review.length} to practice again.` : `Let's practice ${batch.review.length} you already met.`}
+            {batch.due > 0 && (
+              <p className="m-0 text-center text-body font-bold">
+                {batch.due} {flags(batch.due)} to practice today
               </p>
             )}
             {world && !hasNext && (
@@ -692,7 +691,7 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
                 <li key={t.code} className="flex items-center gap-3 rounded-md border-3 border-outline bg-surface-sunk px-3 py-2">
                   <img src={flagUrl(t.code)} alt="" className="block h-10 w-15 shrink-0 rounded-sm border-2 border-outline object-cover" />
                   <span className="min-w-0 flex-1 text-body font-bold">{t.name}</span>
-                  <LevelChip level={progress[t.code] ?? 0} />
+                  <LevelChip level={levelOf(progress, t.code)} />
                 </li>
               ))}
             </ul>
