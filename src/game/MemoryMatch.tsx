@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { flagUrl } from '../countries';
+import { CheckIcon } from './icons';
 import { buildDeck, flip, isDone, MEMORY_START, type MemoryCard, type MemoryCountry, outlinePath } from './memory';
 
 export type { MemoryCountry } from './memory';
@@ -90,7 +91,7 @@ export function MemoryMatch({ countries, onMatch, onDone }: Props) {
                     )}
                     {matched && (
                       <span className="absolute -top-2.5 -right-2.5 grid size-8 place-items-center rounded-full border-3 border-on-leaf bg-leaf-500 text-on-leaf">
-                        <CheckIcon />
+                        <CheckIcon size={20} />
                       </span>
                     )}
                   </span>
@@ -112,14 +113,6 @@ function GlobeIcon() {
     <svg aria-hidden="true" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="9" />
       <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 12l5 5L20 7" />
     </svg>
   );
 }

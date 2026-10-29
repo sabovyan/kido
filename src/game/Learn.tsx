@@ -1,8 +1,6 @@
 import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Collapsible } from '@base-ui/react/collapsible';
 import { Link } from '@tanstack/react-router';
-import * as d3 from 'd3';
-import type { Polygon } from 'geojson';
 import { flagUrl, loadUserCountry, loadWorld, type Country, type World } from '../countries';
 import { factsOf } from '../data/facts';
 import { SoundToggle } from '../SoundToggle';
@@ -11,10 +9,13 @@ import type { Focus } from './board';
 import { FlagJigsaw } from './FlagJigsaw';
 import { FlatBoard } from './FlatBoard';
 import { GlobeBoard } from './GlobeBoard';
+import { ArrowRightIcon, CheckIcon, StarIcon, XIcon } from './icons';
 import { type Asked, BATCH, buildQuestions, dueTargets, levelAfter, levelOf, loadProgress, pickCodes, pickSession, type Progress, saveProgress, schedule, SESSION_MAX, sessionExtras, shuffle } from './learnSession';
 import { MemoryMatch } from './MemoryMatch';
 import type { Paint } from './painter';
 import { FLAG_RECOGNITION } from './recognition';
+import { buildTargets, chapterOf, sovereignOf, type Target, withPaint } from './targets';
+import { CHIP, ICON_BUTTON } from './ui';
 
 // Each new country: meet it on the map, then build its flag. Then a memory game with every
 // country in the session, then practice on the map.
@@ -22,20 +23,10 @@ type Phase = 'start' | 'check' | 'meet' | 'build' | 'match' | 'practice' | 'done
 type Feedback = { tone: 'correct' | 'oops' | 'hint'; title: string; detail: string };
 export type LearnView = 'map' | 'globe';
 
-type Target = {
-  code: string;
-  name: string;
-  features: Country[];
-  center: [number, number];
-  area: number;
-};
-
 type Question = Asked<Target>;
 
 // The quick check keeps asking new flags until the session's new ones are unknown, up to this many.
 const MAX_CHECKS = 8;
-// ~5,000 km², in steradians. Same cut as Flag Hunt's Easy mode.
-const EASY_MIN_AREA = 5_000 / 40_589_000;
 
 const LEVELS = [
   { label: 'New', tint: 'bg-surface-sunk text-fg' },
@@ -43,48 +34,6 @@ const LEVELS = [
   { label: 'Known', tint: 'bg-tint-correct text-on-tint-correct' },
   { label: 'Mastered', tint: 'bg-tint-reward text-on-tint-reward' },
 ];
-
-// Territories whose clicks count for their sovereign country's flag.
-const SOVEREIGN: Record<string, string> = { gl: 'dk' };
-const sovereignOf = (code: string | null) => (code && SOVEREIGN[code]) ?? code;
-
-function largestPolygon(f: Country): Polygon {
-  if (f.geometry.type === 'Polygon') return f.geometry;
-  let best: Polygon = { type: 'Polygon', coordinates: f.geometry.coordinates[0] };
-  for (const coords of f.geometry.coordinates) {
-    const poly: Polygon = { type: 'Polygon', coordinates: coords };
-    if (d3.geoArea(poly) > d3.geoArea(best)) best = poly;
-  }
-  return best;
-}
-
-// Groups features by flag code, like Flag Hunt does.
-function buildTargets(world: World) {
-  const byCode = new Map<string, Country[]>();
-  for (const f of world.features) {
-    const code = sovereignOf(f.properties.code);
-    if (!code) continue;
-    byCode.set(code, [...(byCode.get(code) ?? []), f]);
-  }
-  return [...byCode].map(([code, features]): Target => {
-    const own = features.filter(f => f.properties.code === code);
-    const main = d3.greatest(own.length ? own : features, f => d3.geoArea(f))!;
-    return {
-      code,
-      features,
-      name: main.properties.name,
-      center: d3.geoCentroid(largestPolygon(main)),
-      area: d3.sum(features, f => d3.geoArea(f)),
-    };
-  });
-}
-
-// Flag Hunt's Easy, Medium, Hard pools in that order.
-function chapterOf(t: Target) {
-  const known = FLAG_RECOGNITION[t.code] ?? 0;
-  if (known >= 75 && t.area >= EASY_MIN_AREA) return 0;
-  return known >= 60 ? 1 : 2;
-}
 
 // The player's own country first, then Easy → Medium → Hard, best-known flags first.
 function learnOrder(targets: Target[], homeCode: string | null) {
@@ -142,15 +91,6 @@ const useWide = () => useSyncExternalStore(onWideChange, () => window.matchMedia
 const countries = (n: number) => (n === 1 ? 'country' : 'countries');
 const flags = (n: number) => (n === 1 ? 'flag' : 'flags');
 
-function withPaint(paints: Map<Country, Paint>, features: Country[], paint: Paint | null) {
-  const next = new Map(paints);
-  for (const f of features) {
-    if (paint) next.set(f, paint);
-    else next.delete(f);
-  }
-  return next;
-}
-
 const BUTTON = 'inline-flex h-tap-main items-center gap-2.5 rounded-md border-3 border-outline px-7 font-display text-title-2 no-underline shadow-drop-md transition-transform duration-(--dur-tap) hover:-translate-y-0.5 active:translate-y-[5px] active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 max-md:box-border max-md:w-full max-md:justify-center';
 const MAIN_BUTTON = `${BUTTON} cursor-pointer bg-sun-400 text-on-sun active:bg-sun-600`;
 const OTHER_BUTTON = `${BUTTON} bg-surface text-fg`;
@@ -159,7 +99,6 @@ const NEXT_BUTTON = `${CARD_BUTTON} bg-ocean-500 text-on-ocean active:bg-ocean-7
 const SKIP_BUTTON = `${CARD_BUTTON} bg-surface text-fg`;
 const FLAG_CHOICE = 'grid cursor-pointer place-items-center rounded-md border-3 border-outline bg-surface p-2 shadow-drop-md transition-transform duration-(--dur-tap) hover:-translate-y-0.5 active:translate-y-[5px] active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 disabled:cursor-default disabled:shadow-none disabled:hover:translate-y-0';
 const CARD = 'flex items-center gap-4 rounded-lg border-3 border-outline bg-surface px-[18px] py-3.5 shadow-drop-lg';
-const CHIP = 'flex h-tap-min items-center gap-2 rounded-pill border-3 px-4';
 const FLAG_IMG = 'block h-16 w-24 shrink-0 rounded-sm border-3 border-outline object-cover';
 
 const TONES = {
@@ -168,42 +107,10 @@ const TONES = {
   hint: { box: 'bg-tint-hint text-on-tint-hint', badge: 'border-on-sun bg-sun-400 text-on-sun' },
 };
 
-function ArrowRightIcon() {
-  return (
-    <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 12h14M13 6l6 6-6 6" />
-    </svg>
-  );
-}
-
-function StarIcon({ size = 24 }: { size?: number }) {
-  return (
-    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" strokeWidth="2.5" strokeLinejoin="round" className="fill-sun-400 stroke-on-sun">
-      <path d="M12 3l2.7 5.6 6.1.8-4.4 4.2 1.1 6.1L12 16.8l-5.5 2.9 1.1-6.1-4.4-4.2 6.1-.8z" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 12l5 5L20 7" />
-    </svg>
-  );
-}
-
 function ChevronIcon() {
   return (
     <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-(--dur-pop) ease-bouncy motion-reduce:transition-none">
       <path d="M6 15l6-6 6 6" />
-    </svg>
-  );
-}
-
-function XIcon() {
-  return (
-    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 6l12 12M18 6L6 18" />
     </svg>
   );
 }
@@ -614,7 +521,7 @@ export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView;
       {inSession && (
         // Above the build and match overlays, so Stop and the sound switch stay in reach.
         <div className="absolute top-4 right-4 z-3 flex items-center gap-3 max-md:top-3 max-md:right-3 max-md:left-3">
-          <button type="button" aria-label="Stop learning" onClick={stop} className="grid size-tap-icon shrink-0 cursor-pointer place-items-center rounded-md border-3 border-outline bg-surface p-0 text-fg shadow-drop-sm transition-transform duration-(--dur-tap) active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 md:order-last">
+          <button type="button" aria-label="Stop learning" onClick={stop} className={`${ICON_BUTTON} md:order-last`}>
             <XIcon />
           </button>
           <SoundToggle />
