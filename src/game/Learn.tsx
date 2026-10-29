@@ -1,8 +1,10 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Collapsible } from '@base-ui/react/collapsible';
 import { Link } from '@tanstack/react-router';
 import * as d3 from 'd3';
 import type { Polygon } from 'geojson';
 import { flagUrl, loadUserCountry, loadWorld, type Country, type World } from '../countries';
+import { factsOf } from '../data/facts';
 import { SoundToggle } from '../SoundToggle';
 import { speak } from '../speech';
 import type { Focus } from './board';
@@ -119,6 +121,24 @@ function knownPaints(order: Target[], progress: Progress, skip: Set<string>) {
   return paints;
 }
 
+// Neighbours' names, best-known first (`order` puts famous flags first): up to 4 names,
+// or 3 and how many more.
+function neighbourNames(codes: string[], order: Target[]) {
+  const names = order.filter(t => codes.includes(t.code)).map(t => t.name);
+  if (names.length <= 1) return names[0];
+  if (names.length <= 4) return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  return `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`;
+}
+
+// Phones get a "Fun facts" switch so the card covers no more of the map than before.
+const WIDE = '(min-width: 768px)';
+const onWideChange = (onChange: () => void) => {
+  const media = window.matchMedia(WIDE);
+  media.addEventListener('change', onChange);
+  return () => media.removeEventListener('change', onChange);
+};
+const useWide = () => useSyncExternalStore(onWideChange, () => window.matchMedia(WIDE).matches, () => true);
+
 const countries = (n: number) => (n === 1 ? 'country' : 'countries');
 const flags = (n: number) => (n === 1 ? 'flag' : 'flags');
 
@@ -172,6 +192,14 @@ function CheckIcon() {
   );
 }
 
+function ChevronIcon() {
+  return (
+    <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-(--dur-pop) ease-bouncy motion-reduce:transition-none">
+      <path d="M6 15l6-6 6 6" />
+    </svg>
+  );
+}
+
 function XIcon() {
   return (
     <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -201,6 +229,69 @@ function LevelChip({ level }: { level: number }) {
       {level === 3 && <StarIcon size={16} />}
       {label}
     </span>
+  );
+}
+
+// The meet step: flag, name and a few easy facts. Rows the dataset doesn't have are left out.
+function CountryCard({ target, order, board, open, onOpenChange, saidHi, onNext }: {
+  target: Target;
+  order: Target[];
+  board: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  saidHi: boolean;
+  onNext: () => void;
+}) {
+  const wide = useWide();
+  const facts = factsOf(target.code);
+  const neighbours = facts && neighbourNames(facts.neighbours, order);
+  const rows = facts
+    ? [
+      { label: 'Continent', value: facts.continent },
+      { label: 'Capital', value: facts.capital },
+      { label: 'Flag', value: facts.flag },
+      { label: facts.neighbours.length === 1 ? 'Neighbour' : 'Neighbours', value: neighbours },
+    ].filter(r => r.value)
+    : [];
+  const next = (
+    <button type="button" className={NEXT_BUTTON} disabled={saidHi} onClick={onNext}>
+      Next <ArrowRightIcon />
+    </button>
+  );
+
+  return (
+    <Collapsible.Root open={wide || open} onOpenChange={onOpenChange} className={`${CARD} flex-col items-stretch gap-3`}>
+      <div className="flex items-center gap-4">
+        <img src={flagUrl(target.code)} alt={`Flag of ${target.name}`} className={`${FLAG_IMG} md:h-20 md:w-30`} />
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="font-display text-title-2">This is {target.name}</span>
+          <span className="text-body text-fg-muted">Tap it on the {board} to say hi.</span>
+        </span>
+        {wide && next}
+      </div>
+      {rows.length > 0 && (
+        <Collapsible.Panel className="max-h-[40dvh] overflow-y-auto rounded-md bg-surface-sunk px-4 py-3">
+          <dl className="m-0 grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1">
+            {rows.map(r => (
+              <Fragment key={r.label}>
+                <dt className="text-caption text-fg-muted">{r.label}</dt>
+                <dd className="m-0 text-body">{r.value}</dd>
+              </Fragment>
+            ))}
+          </dl>
+        </Collapsible.Panel>
+      )}
+      {!wide && (
+        <div className="grid auto-cols-fr grid-flow-col gap-3">
+          {rows.length > 0 && (
+            <Collapsible.Trigger className={`${SKIP_BUTTON} [&[data-panel-open]_svg]:rotate-180`}>
+              Fun facts <ChevronIcon />
+            </Collapsible.Trigger>
+          )}
+          {next}
+        </div>
+      )}
+    </Collapsible.Root>
   );
 }
 
@@ -235,6 +326,8 @@ export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView;
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [paints, setPaints] = useState<Map<Country, Paint>>(new Map());
   const [focus, setFocus] = useState<Focus | null>(null);
+  // Whether the meet card's facts are open on phones; kept from one country to the next.
+  const [factsOpen, setFactsOpen] = useState(false);
   // Flag Hunt's countries, until their session starts.
   const [huntCodes, setHuntCodes] = useState(codes);
   const timer = useRef<number>(undefined);
@@ -566,16 +659,15 @@ export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView;
           )}
 
           {meeting && (
-            <div className={`${CARD} max-md:flex-wrap`}>
-              <img src={flagUrl(meeting.code)} alt={`Flag of ${meeting.name}`} className={FLAG_IMG} />
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="font-display text-title-2">This is {meeting.name}</span>
-                <span className="text-body text-fg-muted">Tap it on the {board} to say hi.</span>
-              </span>
-              <button type="button" className={NEXT_BUTTON} disabled={feedback?.tone === 'correct'} onClick={nextMeet}>
-                Next <ArrowRightIcon />
-              </button>
-            </div>
+            <CountryCard
+              target={meeting}
+              order={order}
+              board={board}
+              open={factsOpen}
+              onOpenChange={setFactsOpen}
+              saidHi={feedback?.tone === 'correct'}
+              onNext={nextMeet}
+            />
           )}
 
           {question && question.kind !== 'pick' && (
