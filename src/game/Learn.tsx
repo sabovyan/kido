@@ -3,16 +3,20 @@ import { Link } from '@tanstack/react-router';
 import * as d3 from 'd3';
 import type { Polygon } from 'geojson';
 import { flagUrl, loadUserCountry, loadWorld, type Country, type World } from '../countries';
+import { SoundToggle } from '../SoundToggle';
+import { speak } from '../speech';
 import type { Focus } from './board';
+import { FlagJigsaw } from './FlagJigsaw';
 import { FlatBoard } from './FlatBoard';
 import { GlobeBoard } from './GlobeBoard';
+import { type Asked, buildQuestions, levelAfter, sessionExtras, shuffle } from './learnSession';
+import { MemoryMatch } from './MemoryMatch';
 import type { Paint } from './painter';
 import { FLAG_RECOGNITION } from './recognition';
 
-type Phase = 'start' | 'meet' | 'practice' | 'done';
-// How a country is asked: find it with its name shown, find it from its flag only,
-// or pick its flag while the country is highlighted.
-type Kind = 'name' | 'flag' | 'pick';
+// Each new country: meet it on the map, then build its flag. Then a memory game with every
+// country in the session, then practice on the map.
+type Phase = 'start' | 'check' | 'meet' | 'build' | 'match' | 'practice' | 'done';
 type Feedback = { tone: 'correct' | 'oops' | 'hint'; title: string; detail: string };
 // Sticker level per flag code: 0 new, 1 met, 2 known, 3 mastered.
 type Progress = Record<string, number>;
@@ -26,10 +30,12 @@ type Target = {
   area: number;
 };
 
-type Question = { target: Target; kind: Kind; retry?: boolean };
+type Question = Asked<Target>;
 
 const BATCH = 4;
 const REVIEWS = 2;
+// The quick check keeps asking new flags until BATCH are unknown, up to this many.
+const MAX_CHECKS = 8;
 const STORAGE_KEY = 'flag-map:learn';
 // ~5,000 km², in steradians. Same cut as Flag Hunt's Easy mode.
 const EASY_MIN_AREA = 5_000 / 40_589_000;
@@ -102,35 +108,19 @@ function nextBatch(order: Target[], progress: Progress) {
   return { fresh, review };
 }
 
-// New countries are asked twice: first with their name, then from the flag only.
-function buildQuestions(fresh: Target[], review: Target[], progress: Progress): Question[] {
-  const first = shuffle(fresh.map((target): Question => ({ target, kind: 'name' })));
-  const second = shuffle([
-    ...fresh.map((target): Question => ({ target, kind: 'flag' })),
-    ...review.map((target): Question => ({ target, kind: progress[target.code] >= 2 ? 'pick' : 'flag' })),
-  ]);
-  return [...first, ...second];
-}
-
-function levelAfter(level: number, kind: Kind, ok: boolean) {
-  if (!ok) return 1;
-  if (kind === 'name') return Math.max(level, 1);
-  if (kind === 'flag') return Math.max(level, 2);
-  return level >= 2 ? 3 : 2;
-}
-
 // Two other flags from countries of about the same fame.
 function flagChoices(order: Target[], target: Target) {
-  const i = order.indexOf(target);
-  const near = order.slice(Math.max(0, i - 12), i + 13).filter(t => t !== target);
+  // By code: `order` is rebuilt when the home country loads, so the objects can differ.
+  const i = order.findIndex(t => t.code === target.code);
+  const near = order.slice(Math.max(0, i - 12), i + 13).filter(t => t.code !== target.code);
   return shuffle([target, ...shuffle(near).slice(0, 2)]);
 }
 
 // Known countries show their flags; the ones being learned stay blank until found.
-function knownPaints(order: Target[], progress: Progress, skip: Set<Target>) {
+function knownPaints(order: Target[], progress: Progress, skip: Set<string>) {
   const paints = new Map<Country, Paint>();
   for (const t of order) {
-    if (skip.has(t) || (progress[t.code] ?? 0) < 2) continue;
+    if (skip.has(t.code) || (progress[t.code] ?? 0) < 2) continue;
     for (const f of t.features) paints.set(f, 'flag');
   }
   return paints;
@@ -163,19 +153,12 @@ function withPaint(paints: Map<Country, Paint>, features: Country[], paint: Pain
   return next;
 }
 
-function shuffle<T>(items: T[]) {
-  const a = [...items];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
 const BUTTON = 'inline-flex h-tap-main items-center gap-2.5 rounded-md border-3 border-outline px-7 font-display text-title-2 no-underline shadow-drop-md transition-transform duration-(--dur-tap) hover:-translate-y-0.5 active:translate-y-[5px] active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 max-md:box-border max-md:w-full max-md:justify-center';
 const MAIN_BUTTON = `${BUTTON} cursor-pointer bg-sun-400 text-on-sun active:bg-sun-600`;
 const OTHER_BUTTON = `${BUTTON} bg-surface text-fg`;
-const NEXT_BUTTON = 'inline-flex h-tap-min shrink-0 cursor-pointer items-center gap-2 rounded-md border-3 border-outline bg-ocean-500 px-5 font-display text-title-3 text-on-ocean shadow-drop-sm transition-transform duration-(--dur-tap) active:translate-y-1 active:bg-ocean-700 active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 disabled:cursor-default disabled:border-dashed disabled:bg-surface-sunk disabled:text-fg-muted disabled:shadow-none max-md:box-border max-md:w-full max-md:justify-center';
+const CARD_BUTTON = 'inline-flex h-tap-min shrink-0 cursor-pointer items-center gap-2 rounded-md border-3 border-outline px-5 font-display text-title-3 shadow-drop-sm transition-transform duration-(--dur-tap) active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 disabled:cursor-default disabled:border-dashed disabled:bg-surface-sunk disabled:text-fg-muted disabled:shadow-none max-md:box-border max-md:w-full max-md:justify-center';
+const NEXT_BUTTON = `${CARD_BUTTON} bg-ocean-500 text-on-ocean active:bg-ocean-700`;
+const SKIP_BUTTON = `${CARD_BUTTON} bg-surface text-fg`;
 const FLAG_CHOICE = 'grid cursor-pointer place-items-center rounded-md border-3 border-outline bg-surface p-2 shadow-drop-md transition-transform duration-(--dur-tap) hover:-translate-y-0.5 active:translate-y-[5px] active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 disabled:cursor-default disabled:shadow-none disabled:hover:translate-y-0';
 const CARD = 'flex items-center gap-4 rounded-lg border-3 border-outline bg-surface px-[18px] py-3.5 shadow-drop-lg';
 const CHIP = 'flex h-tap-min items-center gap-2 rounded-pill border-3 px-4';
@@ -228,7 +211,10 @@ function BulbIcon() {
   );
 }
 
-const TONE_ICONS = { correct: <CheckIcon />, oops: <XIcon />, hint: <BulbIcon /> };
+// The progress chip's word for each step of a session.
+const STEP_LABELS: Partial<Record<Phase, string>> = { check: 'Check', meet: 'Meet', build: 'Build', match: 'Match', practice: 'Practice' };
+
+const TONE_ICONS ={ correct: <CheckIcon />, oops: <XIcon />, hint: <BulbIcon /> };
 
 function LevelChip({ level }: { level: number }) {
   const { label, tint } = LEVELS[level] ?? LEVELS[0];
@@ -246,9 +232,21 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
   const [progress, setProgress] = useState<Progress>({});
 
   const [phase, setPhase] = useState<Phase>('start');
+  // Quick check: new countries in order, how many of them get asked, and the answers so far.
+  const [candidates, setCandidates] = useState<Target[]>([]);
+  const [checkCount, setCheckCount] = useState(0);
+  const [checkIndex, setCheckIndex] = useState(0);
+  const [unknown, setUnknown] = useState<Target[]>([]);
+  const [knew, setKnew] = useState<Target[]>([]);
+  const [review, setReview] = useState<Target[]>([]);
   const [fresh, setFresh] = useState<Target[]>([]);
   const [session, setSession] = useState<Target[]>([]);
+  // Codes of countries the kid knew in the check that join just to repeat them.
+  const [repeats, setRepeats] = useState<Set<string>>(new Set());
   const [meetIndex, setMeetIndex] = useState(0);
+  const [matches, setMatches] = useState(0);
+  // Bumped each session so the memory game deals new cards.
+  const [round, setRound] = useState(0);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [index, setIndex] = useState(0);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -293,10 +291,13 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
     setFocus({ lonLat: target.center, features: target.features, id: Date.now() });
   }, [question]);
 
+  // Functional, so a level set from a timer doesn't drop one set just before.
   const setLevel = (code: string, level: number) => {
-    const next = { ...progress, [code]: level };
-    setProgress(next);
-    saveProgress(next);
+    setProgress(p => {
+      const next = { ...p, [code]: level };
+      saveProgress(next);
+      return next;
+    });
   };
 
   const meet = (i: number, batchFresh: Target[]) => {
@@ -305,38 +306,113 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
     setFeedback(null);
     setPaints(p => withPaint(p, t.features, 'flag'));
     setFocus({ lonLat: t.center, features: t.features, id: Date.now() });
+    speak(t.name);
   };
 
+  // The countries being practiced go blank so their flags don't give them away.
   const startPractice = (sessionTargets: Target[]) => {
-    setPaints(knownPaints(order, progress, new Set(sessionTargets)));
+    setPaints(p => withPaint(p, sessionTargets.flatMap(t => t.features), null));
     setFeedback(null);
     setIndex(0);
     setPhase('practice');
   };
 
-  const start = () => {
-    const { fresh: f, review } = batch;
-    if (!f.length && !review.length) return;
-    window.clearTimeout(timer.current);
-    const all = [...f, ...review];
-    setFresh(f);
-    setSession(all);
-    setQuestions(buildQuestions(f, review, progress));
-    if (!f.length) {
-      startPractice(all);
-      return;
-    }
-    setPaints(knownPaints(order, progress, new Set(all)));
-    setPhase('meet');
-    meet(0, f);
+  // The memory game needs at least 2 countries.
+  const afterBuilding = (sessionTargets: Target[]) => {
+    setFeedback(null);
+    if (sessionTargets.length >= 2) setPhase('match');
+    else startPractice(sessionTargets);
   };
 
+  // After the check: meet and build what the kid didn't know; reviews and a few countries
+  // they knew join for the memory game and the map.
+  const beginLearning = (missed: Target[], reviews: Target[], known: Target[]) => {
+    const { extras, repeats: again } = sessionExtras(reviews, known);
+    const all = [...missed, ...extras];
+    setFresh(missed);
+    setSession(all);
+    setRepeats(new Set(again.map(t => t.code)));
+    setQuestions(buildQuestions(all));
+    setMatches(0);
+    setRound(r => r + 1);
+    if (missed.length) {
+      setPhase('meet');
+      meet(0, missed);
+    } else if (all.length) {
+      afterBuilding(all);
+    } else {
+      setPhase('done');
+    }
+  };
+
+  const start = () => {
+    const { fresh: f, review: r } = batch;
+    if (!f.length && !r.length) return;
+    window.clearTimeout(timer.current);
+    setFeedback(null);
+    setReview(r);
+    setKnew([]);
+    setUnknown([]);
+    if (!f.length) {
+      beginLearning([], r, []);
+      return;
+    }
+    const pool = order.filter(t => !progress[t.code]);
+    setCandidates(pool);
+    setCheckCount(Math.min(BATCH, pool.length));
+    setCheckIndex(0);
+    setPaints(knownPaints(order, progress, new Set(r.map(t => t.code))));
+    setPhase('check');
+  };
+
+  // A flag the kid already knows becomes Known and the check asks one more;
+  // an unknown one is kept for the meet step. No penalty either way.
+  const answerCheck = (ok: boolean, miss?: Feedback) => {
+    const t = candidates[checkIndex];
+    const missed = ok ? unknown : [...unknown, t];
+    const known = ok ? [...knew, t] : knew;
+    const count = ok ? Math.min(checkCount + 1, MAX_CHECKS, candidates.length) : checkCount;
+    if (ok) {
+      setLevel(t.code, 2);
+      setKnew(known);
+      setPaints(p => withPaint(p, t.features, 'flag'));
+    }
+    setUnknown(missed);
+    setCheckCount(count);
+    setFeedback(ok ? { tone: 'correct', title: `Yes! You know ${t.name}`, detail: 'No need to learn it again.' } : (miss ?? null));
+    timer.current = window.setTimeout(() => {
+      setFeedback(null);
+      if (missed.length >= BATCH || checkIndex + 1 >= count) beginLearning(missed, review, known);
+      else setCheckIndex(checkIndex + 1);
+    }, ok ? 1200 : 1500);
+  };
+
+  // Met: on to building its flag.
   const nextMeet = () => {
     window.clearTimeout(timer.current);
     const t = fresh[meetIndex];
     setLevel(t.code, Math.max(progress[t.code] ?? 0, 1));
-    if (meetIndex + 1 < fresh.length) meet(meetIndex + 1, fresh);
-    else startPractice(session);
+    setFeedback(null);
+    setPhase('build');
+  };
+
+  // Flag built: say its name, give it a moment, then meet the next country.
+  const builtFlag = () => {
+    speak(fresh[meetIndex].name);
+    timer.current = window.setTimeout(() => {
+      if (meetIndex + 1 < fresh.length) {
+        setPhase('meet');
+        meet(meetIndex + 1, fresh);
+      } else {
+        afterBuilding(session);
+      }
+    }, 1200);
+  };
+
+  const matched = (code: string) => {
+    const t = session.find(s => s.code === code);
+    if (t) speak(t.name);
+    setMatches(m => m + 1);
   };
 
   // Moves on; a country that will be asked again goes blank so its flag doesn't give it away.
@@ -351,7 +427,7 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
     if (!question) return;
     const { target: t, kind } = question;
     const before = progress[t.code] ?? 0;
-    const level = levelAfter(before, kind, ok);
+    const level = levelAfter(before, kind, ok, repeats.has(t.code));
     setLevel(t.code, level);
 
     if (ok) {
@@ -389,8 +465,16 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
   };
 
   const onPick = (clicked: Country) => {
-    if (feedback && feedback.tone !== 'hint') return;
     const code = sovereignOf(clicked.properties.code);
+
+    if (phase === 'check') {
+      if (feedback) return;
+      if (code === candidates[checkIndex].code) answerCheck(true);
+      else answerCheck(false, { tone: 'hint', title: `That's ${clicked.properties.name}`, detail: "No problem, let's meet this one!" });
+      return;
+    }
+
+    if (feedback && feedback.tone !== 'hint') return;
 
     if (phase === 'meet') {
       const t = fresh[meetIndex];
@@ -415,9 +499,13 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
     setPhase('start');
   };
 
-  const inSession = phase === 'meet' || phase === 'practice';
-  const step = phase === 'meet' ? meetIndex + 1 : index + 1;
-  const steps = phase === 'meet' ? fresh.length : questions.length;
+  const stepLabel = STEP_LABELS[phase];
+  const inSession = stepLabel !== undefined;
+  // Meet and build go one new country at a time.
+  const perCountry = phase === 'meet' || phase === 'build';
+  const step = phase === 'check' ? checkIndex + 1 : perCountry ? meetIndex + 1 : phase === 'match' ? matches : index + 1;
+  const steps = phase === 'check' ? checkCount : perCountry ? fresh.length : phase === 'match' ? session.length : questions.length;
+  const checking = phase === 'check' ? candidates[checkIndex] : undefined;
   const meeting = phase === 'meet' ? fresh[meetIndex] : undefined;
   const hasNext = batch.fresh.length + batch.review.length > 0;
 
@@ -426,12 +514,14 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
     // `data-game-active` hides the app's top bar and tab bar on phones during a session.
     <div data-game-active={inSession ? '' : undefined} className={`relative h-full font-body text-fg [&_canvas]:cursor-crosshair ${view === 'globe' ? 'bg-backdrop' : 'bg-map-sea'}`}>
       {inSession && (
-        <div className="absolute top-4 right-4 z-1 flex items-center gap-3 max-md:top-3 max-md:right-3 max-md:left-3">
+        // Above the build and match overlays, so Stop and the sound switch stay in reach.
+        <div className="absolute top-4 right-4 z-3 flex items-center gap-3 max-md:top-3 max-md:right-3 max-md:left-3">
           <button type="button" aria-label="Stop learning" onClick={stop} className="grid size-tap-icon shrink-0 cursor-pointer place-items-center rounded-md border-3 border-outline bg-surface p-0 text-fg shadow-drop-sm transition-transform duration-(--dur-tap) active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 md:order-last">
             <XIcon />
           </button>
-          <div className={`${CHIP} border-outline bg-surface text-label tabular-nums max-md:h-tap-icon max-md:min-w-0 max-md:flex-1 max-md:box-border max-md:shadow-drop-sm`}>
-            <span className="shrink-0">{phase === 'meet' ? 'Meet' : 'Practice'} {step} / {steps}</span>
+          <SoundToggle />
+          <div className={`${CHIP} border-outline bg-surface text-label tabular-nums md:order-first max-md:h-tap-icon max-md:min-w-0 max-md:flex-1 max-md:box-border max-md:shadow-drop-sm`}>
+            <span className="shrink-0">{stepLabel} {step} / {steps}</span>
             <span className="block h-3 w-20 overflow-hidden rounded-pill border-2 border-outline bg-surface-sunk max-md:w-auto max-md:flex-1">
               <span className="block h-full bg-leaf-500 transition-[width] duration-(--dur-pop) motion-reduce:transition-none" style={{ width: `${(step / steps) * 100}%` }} />
             </span>
@@ -455,6 +545,19 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
                 <span className="text-caption">{feedback.detail}</span>
               </span>
             </output>
+          )}
+
+          {checking && (
+            <div className={`${CARD} max-md:flex-wrap`}>
+              <img src={flagUrl(checking.code)} alt="Flag to find" className={FLAG_IMG} />
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="font-display text-title-2">Do you know this one?</span>
+                <span className="text-body text-fg-muted">Tap its country on the {board}.</span>
+              </span>
+              <button type="button" className={SKIP_BUTTON} disabled={!!feedback} onClick={() => answerCheck(false, { tone: 'hint', title: 'No problem!', detail: "Let's meet this one." })}>
+                Not yet
+              </button>
+            </div>
           )}
 
           {meeting && (
@@ -493,7 +596,7 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
                     key={c.code}
                     aria-label={`Flag of ${c.name}`}
                     disabled={!!feedback}
-                    onClick={() => answer(c === question.target, c.name)}
+                    onClick={() => answer(c.code === question.target.code, c.name)}
                     className={FLAG_CHOICE}
                   >
                     <img src={flagUrl(c.code)} alt="" className="block aspect-[3/2] w-full rounded-sm border-2 border-outline object-cover" />
@@ -505,13 +608,34 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
         </div>
       )}
 
+      {/* Build and match sit over the map; the top padding keeps them clear of the progress chip. */}
+      {phase === 'build' && fresh[meetIndex] && (
+        <div className="absolute inset-0 z-2 grid place-items-center overflow-y-auto bg-scrim p-4 pt-20 max-md:grid-cols-1">
+          <div className="w-[480px] max-w-full">
+            <FlagJigsaw key={fresh[meetIndex].code} code={fresh[meetIndex].code} name={fresh[meetIndex].name} onDone={builtFlag} />
+          </div>
+        </div>
+      )}
+
+      {phase === 'match' && (
+        <div className="absolute inset-0 z-2 grid place-items-center overflow-y-auto bg-scrim p-4 pt-20 max-md:grid-cols-1">
+          <section className="box-border flex w-[680px] max-w-full flex-col items-center gap-4 rounded-lg border-3 border-outline bg-surface p-5 text-fg shadow-drop-lg">
+            <div className="flex flex-col gap-0.5 text-center">
+              <h2 className="m-0 font-display text-title-2">Find the pairs</h2>
+              <p className="m-0 text-body text-fg-muted">Match each flag with its country.</p>
+            </div>
+            <MemoryMatch key={round} countries={session} onMatch={matched} onDone={() => startPractice(session)} />
+          </section>
+        </div>
+      )}
+
       {phase === 'start' && (
         <div className="absolute inset-0 z-2 grid place-items-center bg-scrim p-4 max-md:grid-cols-1">
           <section className="box-border flex w-[640px] max-w-full flex-col gap-[18px] rounded-lg border-3 border-outline bg-surface p-7 text-fg shadow-drop-lg max-md:max-h-full max-md:gap-4 max-md:overflow-y-auto max-md:p-5">
             <div className="flex flex-col gap-1.5 text-center">
               <h2 className="m-0 font-display text-title-1">Learn flags</h2>
               <p className="m-0 text-body-lg text-fg-muted">
-                Meet {BATCH} countries and their flags. Then find them on the {board}.
+                First a quick check. Then meet new flags, build them, play a memory game and find them on the {board}.
               </p>
               {!world && <p className="m-0 text-body text-fg-muted">Loading map…</p>}
             </div>
@@ -529,19 +653,6 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
                     <span className="text-caption">{counts[i + 1]}</span>
                   </span>
                 ))}
-              </div>
-            )}
-            {batch.fresh.length > 0 && (
-              <div className="flex flex-col gap-3">
-                <span className="text-center text-label">Up next</span>
-                <ul className="m-0 grid list-none grid-cols-4 gap-3 p-0 max-md:grid-cols-2">
-                  {batch.fresh.map(t => (
-                    <li key={t.code} className="flex flex-col items-center gap-2 rounded-md border-3 border-outline bg-surface-sunk p-3 text-center">
-                      <img src={flagUrl(t.code)} alt="" className="block h-12 w-18 rounded-sm border-2 border-outline object-cover" />
-                      <span className="text-caption">{t.name}</span>
-                    </li>
-                  ))}
-                </ul>
               </div>
             )}
             {batch.review.length > 0 && (
@@ -566,16 +677,18 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
 
       {phase === 'done' && (
         <div className="absolute inset-0 z-2 grid place-items-center bg-scrim p-4 max-md:grid-cols-1">
-          <section className="box-border flex w-[560px] max-w-full flex-col gap-4 rounded-lg border-3 border-outline bg-surface p-7 text-center text-fg shadow-drop-lg max-md:max-h-full max-md:overflow-y-auto max-md:p-5">
+          <section className="box-border flex w-[560px] max-w-full flex-col gap-4 rounded-lg border-3 border-outline bg-surface p-7 text-center text-fg shadow-drop-lg max-h-full overflow-y-auto max-md:p-5">
             <div className="flex items-end justify-center gap-1.5">
               <StarIcon size={44} /><StarIcon size={60} /><StarIcon size={44} />
             </div>
             <h2 className="m-0 font-display text-title-1">Great job!</h2>
             <p className="m-0 text-body-lg">
-              {fresh.length ? `You met ${fresh.length} new ${countries(fresh.length)}.` : `You practiced ${session.length} ${countries(session.length)}.`}
+              {knew.length > 0 && `You already knew ${knew.length}! `}
+              {fresh.length ? `You met ${fresh.length} new ${countries(fresh.length)}.` : session.length ? `You practiced ${session.length} ${countries(session.length)}.` : ''}
             </p>
             <ul className="m-0 flex list-none flex-col gap-2 p-0 text-left">
-              {session.map(t => (
+              {/* Countries known in the check that also repeated are listed once. */}
+              {[...knew.filter(k => !session.some(s => s.code === k.code)), ...session].map(t => (
                 <li key={t.code} className="flex items-center gap-3 rounded-md border-3 border-outline bg-surface-sunk px-3 py-2">
                   <img src={flagUrl(t.code)} alt="" className="block h-10 w-15 shrink-0 rounded-sm border-2 border-outline object-cover" />
                   <span className="min-w-0 flex-1 text-body font-bold">{t.name}</span>
