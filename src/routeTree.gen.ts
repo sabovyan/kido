@@ -14,6 +14,7 @@ import { Route as CountryRouteImport } from './routes/country'
 import { Route as CountryIndexRouteImport } from './routes/country/index'
 import { Route as CountryDiscoverRouteImport } from './routes/country/discover'
 import { Route as CountryGamesRouteImport } from './routes/country/games'
+import { Route as CountryLearnRouteImport } from './routes/country/learn'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,18 +41,25 @@ const CountryGamesRoute = CountryGamesRouteImport.update({
   path: '/games',
   getParentRoute: () => CountryRoute,
 } as any)
+const CountryLearnRoute = CountryLearnRouteImport.update({
+  id: '/learn',
+  path: '/learn',
+  getParentRoute: () => CountryRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/country': typeof CountryRouteWithChildren
   '/country/discover': typeof CountryDiscoverRoute
   '/country/games': typeof CountryGamesRoute
+  '/country/learn': typeof CountryLearnRoute
   '/country/': typeof CountryIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/country/discover': typeof CountryDiscoverRoute
   '/country/games': typeof CountryGamesRoute
+  '/country/learn': typeof CountryLearnRoute
   '/country': typeof CountryIndexRoute
 }
 export interface FileRoutesById {
@@ -60,20 +68,28 @@ export interface FileRoutesById {
   '/country': typeof CountryRouteWithChildren
   '/country/discover': typeof CountryDiscoverRoute
   '/country/games': typeof CountryGamesRoute
+  '/country/learn': typeof CountryLearnRoute
   '/country/': typeof CountryIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/country' | '/country/discover' | '/country/games' | '/country/'
+    | '/'
+    | '/country'
+    | '/country/discover'
+    | '/country/games'
+    | '/country/learn'
+    | '/country/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/country/discover' | '/country/games' | '/country'
+  to:
+    '/' | '/country/discover' | '/country/games' | '/country/learn' | '/country'
   id:
     | '__root__'
     | '/'
     | '/country'
     | '/country/discover'
     | '/country/games'
+    | '/country/learn'
     | '/country/'
   fileRoutesById: FileRoutesById
 }
@@ -119,18 +135,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CountryGamesRouteImport
       parentRoute: typeof CountryRoute
     }
+    '/country/learn': {
+      id: '/country/learn'
+      path: '/learn'
+      fullPath: '/country/learn'
+      preLoaderRoute: typeof CountryLearnRouteImport
+      parentRoute: typeof CountryRoute
+    }
   }
 }
 
 interface CountryRouteChildren {
   CountryDiscoverRoute: typeof CountryDiscoverRoute
   CountryGamesRoute: typeof CountryGamesRoute
+  CountryLearnRoute: typeof CountryLearnRoute
   CountryIndexRoute: typeof CountryIndexRoute
 }
 
 const CountryRouteChildren: CountryRouteChildren = {
   CountryDiscoverRoute: CountryDiscoverRoute,
   CountryGamesRoute: CountryGamesRoute,
+  CountryLearnRoute: CountryLearnRoute,
   CountryIndexRoute: CountryIndexRoute,
 }
 

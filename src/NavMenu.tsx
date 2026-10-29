@@ -25,6 +25,15 @@ export function TargetIcon() {
   );
 }
 
+export function BookIcon() {
+  return (
+    <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 6.5C10 5 7.5 4.5 4 4.5v14c3.5 0 6 .5 8 2 2-1.5 4.5-2 8-2v-14c-3.5 0-6 .5-8 2z" />
+      <path d="M12 6.5v14" />
+    </svg>
+  );
+}
+
 function MenuIcon() {
   return (
     <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -59,6 +68,9 @@ export function NavMenu() {
           <Menu.Popup className="box-border flex w-65 origin-(--transform-origin) flex-col gap-1 rounded-lg border-3 border-outline bg-surface p-2 font-body shadow-drop-lg outline-none transition-[opacity,scale] duration-(--dur-pop) ease-bouncy data-ending-style:scale-90 data-ending-style:opacity-0 data-starting-style:scale-90 data-starting-style:opacity-0 motion-reduce:transition-none">
             <Menu.LinkItem closeOnClick className={ITEM} render={<Link to="/country/discover" activeProps={ITEM_ACTIVE} inactiveProps={ITEM_INACTIVE} />}>
               <CompassIcon />Discover
+            </Menu.LinkItem>
+            <Menu.LinkItem closeOnClick className={ITEM} render={<Link to="/country/learn" activeProps={ITEM_ACTIVE} inactiveProps={ITEM_INACTIVE} />}>
+              <BookIcon />Learn
             </Menu.LinkItem>
             <Menu.LinkItem closeOnClick className={ITEM} render={<Link to="/country/games" activeProps={ITEM_ACTIVE} inactiveProps={ITEM_INACTIVE} />}>
               <TargetIcon />Games
