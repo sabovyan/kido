@@ -9,7 +9,7 @@ import { GlobeBoard } from './GlobeBoard';
 import type { Paint } from './painter';
 import { FLAG_RECOGNITION } from './recognition';
 
-type Phase = 'start' | 'meet' | 'practice' | 'done';
+type Phase = 'start' | 'check' | 'meet' | 'practice' | 'done';
 // How a country is asked: find it with its name shown, find it from its flag only,
 // or pick its flag while the country is highlighted.
 type Kind = 'name' | 'flag' | 'pick';
@@ -30,6 +30,8 @@ type Question = { target: Target; kind: Kind; retry?: boolean };
 
 const BATCH = 4;
 const REVIEWS = 2;
+// The quick check keeps asking new flags until BATCH are unknown, up to this many.
+const MAX_CHECKS = 8;
 const STORAGE_KEY = 'flag-map:learn';
 // ~5,000 km², in steradians. Same cut as Flag Hunt's Easy mode.
 const EASY_MIN_AREA = 5_000 / 40_589_000;
@@ -102,9 +104,10 @@ function nextBatch(order: Target[], progress: Progress) {
   return { fresh, review };
 }
 
-// New countries are asked twice: first with their name, then from the flag only.
+// New countries are asked twice: first pick their flag while the country is lit up,
+// then find them from the flag only.
 function buildQuestions(fresh: Target[], review: Target[], progress: Progress): Question[] {
-  const first = shuffle(fresh.map((target): Question => ({ target, kind: 'name' })));
+  const first = shuffle(fresh.map((target): Question => ({ target, kind: 'pick' })));
   const second = shuffle([
     ...fresh.map((target): Question => ({ target, kind: 'flag' })),
     ...review.map((target): Question => ({ target, kind: progress[target.code] >= 2 ? 'pick' : 'flag' })),
@@ -116,21 +119,23 @@ function levelAfter(level: number, kind: Kind, ok: boolean) {
   if (!ok) return 1;
   if (kind === 'name') return Math.max(level, 1);
   if (kind === 'flag') return Math.max(level, 2);
-  return level >= 2 ? 3 : 2;
+  // Picking the flag is the easy step for a new country; for a known one it means mastered.
+  return level >= 2 ? 3 : Math.max(level, 1);
 }
 
 // Two other flags from countries of about the same fame.
 function flagChoices(order: Target[], target: Target) {
-  const i = order.indexOf(target);
-  const near = order.slice(Math.max(0, i - 12), i + 13).filter(t => t !== target);
+  // By code: `order` is rebuilt when the home country loads, so the objects can differ.
+  const i = order.findIndex(t => t.code === target.code);
+  const near = order.slice(Math.max(0, i - 12), i + 13).filter(t => t.code !== target.code);
   return shuffle([target, ...shuffle(near).slice(0, 2)]);
 }
 
 // Known countries show their flags; the ones being learned stay blank until found.
-function knownPaints(order: Target[], progress: Progress, skip: Set<Target>) {
+function knownPaints(order: Target[], progress: Progress, skip: Set<string>) {
   const paints = new Map<Country, Paint>();
   for (const t of order) {
-    if (skip.has(t) || (progress[t.code] ?? 0) < 2) continue;
+    if (skip.has(t.code) || (progress[t.code] ?? 0) < 2) continue;
     for (const f of t.features) paints.set(f, 'flag');
   }
   return paints;
@@ -175,7 +180,9 @@ function shuffle<T>(items: T[]) {
 const BUTTON = 'inline-flex h-tap-main items-center gap-2.5 rounded-md border-3 border-outline px-7 font-display text-title-2 no-underline shadow-drop-md transition-transform duration-(--dur-tap) hover:-translate-y-0.5 active:translate-y-[5px] active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 max-md:box-border max-md:w-full max-md:justify-center';
 const MAIN_BUTTON = `${BUTTON} cursor-pointer bg-sun-400 text-on-sun active:bg-sun-600`;
 const OTHER_BUTTON = `${BUTTON} bg-surface text-fg`;
-const NEXT_BUTTON = 'inline-flex h-tap-min shrink-0 cursor-pointer items-center gap-2 rounded-md border-3 border-outline bg-ocean-500 px-5 font-display text-title-3 text-on-ocean shadow-drop-sm transition-transform duration-(--dur-tap) active:translate-y-1 active:bg-ocean-700 active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 disabled:cursor-default disabled:border-dashed disabled:bg-surface-sunk disabled:text-fg-muted disabled:shadow-none max-md:box-border max-md:w-full max-md:justify-center';
+const CARD_BUTTON = 'inline-flex h-tap-min shrink-0 cursor-pointer items-center gap-2 rounded-md border-3 border-outline px-5 font-display text-title-3 shadow-drop-sm transition-transform duration-(--dur-tap) active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 disabled:cursor-default disabled:border-dashed disabled:bg-surface-sunk disabled:text-fg-muted disabled:shadow-none max-md:box-border max-md:w-full max-md:justify-center';
+const NEXT_BUTTON = `${CARD_BUTTON} bg-ocean-500 text-on-ocean active:bg-ocean-700`;
+const SKIP_BUTTON = `${CARD_BUTTON} bg-surface text-fg`;
 const FLAG_CHOICE = 'grid cursor-pointer place-items-center rounded-md border-3 border-outline bg-surface p-2 shadow-drop-md transition-transform duration-(--dur-tap) hover:-translate-y-0.5 active:translate-y-[5px] active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 disabled:cursor-default disabled:shadow-none disabled:hover:translate-y-0';
 const CARD = 'flex items-center gap-4 rounded-lg border-3 border-outline bg-surface px-[18px] py-3.5 shadow-drop-lg';
 const CHIP = 'flex h-tap-min items-center gap-2 rounded-pill border-3 px-4';
@@ -246,6 +253,13 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
   const [progress, setProgress] = useState<Progress>({});
 
   const [phase, setPhase] = useState<Phase>('start');
+  // Quick check: new countries in order, how many of them get asked, and the answers so far.
+  const [candidates, setCandidates] = useState<Target[]>([]);
+  const [checkCount, setCheckCount] = useState(0);
+  const [checkIndex, setCheckIndex] = useState(0);
+  const [unknown, setUnknown] = useState<Target[]>([]);
+  const [knew, setKnew] = useState<Target[]>([]);
+  const [review, setReview] = useState<Target[]>([]);
   const [fresh, setFresh] = useState<Target[]>([]);
   const [session, setSession] = useState<Target[]>([]);
   const [meetIndex, setMeetIndex] = useState(0);
@@ -293,10 +307,13 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
     setFocus({ lonLat: target.center, features: target.features, id: Date.now() });
   }, [question]);
 
+  // Functional, so a level set from a timer doesn't drop one set just before.
   const setLevel = (code: string, level: number) => {
-    const next = { ...progress, [code]: level };
-    setProgress(next);
-    saveProgress(next);
+    setProgress(p => {
+      const next = { ...p, [code]: level };
+      saveProgress(next);
+      return next;
+    });
   };
 
   const meet = (i: number, batchFresh: Target[]) => {
@@ -307,28 +324,69 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
     setFocus({ lonLat: t.center, features: t.features, id: Date.now() });
   };
 
+  // The countries being practiced go blank so their flags don't give them away.
   const startPractice = (sessionTargets: Target[]) => {
-    setPaints(knownPaints(order, progress, new Set(sessionTargets)));
+    setPaints(p => withPaint(p, sessionTargets.flatMap(t => t.features), null));
     setFeedback(null);
     setIndex(0);
     setPhase('practice');
   };
 
-  const start = () => {
-    const { fresh: f, review } = batch;
-    if (!f.length && !review.length) return;
-    window.clearTimeout(timer.current);
-    const all = [...f, ...review];
-    setFresh(f);
+  // After the check: meet what the kid didn't know, then practice it with the reviews.
+  const beginLearning = (missed: Target[], reviews: Target[]) => {
+    const all = [...missed, ...reviews];
+    setFresh(missed);
     setSession(all);
-    setQuestions(buildQuestions(f, review, progress));
-    if (!f.length) {
+    setQuestions(buildQuestions(missed, reviews, progress));
+    if (missed.length) {
+      setPhase('meet');
+      meet(0, missed);
+    } else if (reviews.length) {
       startPractice(all);
+    } else {
+      setPhase('done');
+    }
+  };
+
+  const start = () => {
+    const { fresh: f, review: r } = batch;
+    if (!f.length && !r.length) return;
+    window.clearTimeout(timer.current);
+    setFeedback(null);
+    setReview(r);
+    setKnew([]);
+    setUnknown([]);
+    if (!f.length) {
+      beginLearning([], r);
       return;
     }
-    setPaints(knownPaints(order, progress, new Set(all)));
-    setPhase('meet');
-    meet(0, f);
+    const pool = order.filter(t => !progress[t.code]);
+    setCandidates(pool);
+    setCheckCount(Math.min(BATCH, pool.length));
+    setCheckIndex(0);
+    setPaints(knownPaints(order, progress, new Set(r.map(t => t.code))));
+    setPhase('check');
+  };
+
+  // A flag the kid already knows becomes Known and the check asks one more;
+  // an unknown one is kept for the meet step. No penalty either way.
+  const answerCheck = (ok: boolean, miss?: Feedback) => {
+    const t = candidates[checkIndex];
+    const missed = ok ? unknown : [...unknown, t];
+    const count = ok ? Math.min(checkCount + 1, MAX_CHECKS, candidates.length) : checkCount;
+    if (ok) {
+      setLevel(t.code, 2);
+      setKnew(k => [...k, t]);
+      setPaints(p => withPaint(p, t.features, 'flag'));
+    }
+    setUnknown(missed);
+    setCheckCount(count);
+    setFeedback(ok ? { tone: 'correct', title: `Yes! You know ${t.name}`, detail: 'No need to learn it again.' } : (miss ?? null));
+    timer.current = window.setTimeout(() => {
+      setFeedback(null);
+      if (missed.length >= BATCH || checkIndex + 1 >= count) beginLearning(missed, review);
+      else setCheckIndex(checkIndex + 1);
+    }, ok ? 1200 : 1500);
   };
 
   const nextMeet = () => {
@@ -389,8 +447,16 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
   };
 
   const onPick = (clicked: Country) => {
-    if (feedback && feedback.tone !== 'hint') return;
     const code = sovereignOf(clicked.properties.code);
+
+    if (phase === 'check') {
+      if (feedback) return;
+      if (code === candidates[checkIndex].code) answerCheck(true);
+      else answerCheck(false, { tone: 'hint', title: `That's ${clicked.properties.name}`, detail: "No problem, let's meet this one!" });
+      return;
+    }
+
+    if (feedback && feedback.tone !== 'hint') return;
 
     if (phase === 'meet') {
       const t = fresh[meetIndex];
@@ -415,9 +481,11 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
     setPhase('start');
   };
 
-  const inSession = phase === 'meet' || phase === 'practice';
-  const step = phase === 'meet' ? meetIndex + 1 : index + 1;
-  const steps = phase === 'meet' ? fresh.length : questions.length;
+  const inSession = phase === 'check' || phase === 'meet' || phase === 'practice';
+  const step = phase === 'check' ? checkIndex + 1 : phase === 'meet' ? meetIndex + 1 : index + 1;
+  const steps = phase === 'check' ? checkCount : phase === 'meet' ? fresh.length : questions.length;
+  const stepLabel = phase === 'check' ? 'Check' : phase === 'meet' ? 'Meet' : 'Practice';
+  const checking = phase === 'check' ? candidates[checkIndex] : undefined;
   const meeting = phase === 'meet' ? fresh[meetIndex] : undefined;
   const hasNext = batch.fresh.length + batch.review.length > 0;
 
@@ -431,7 +499,7 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
             <XIcon />
           </button>
           <div className={`${CHIP} border-outline bg-surface text-label tabular-nums max-md:h-tap-icon max-md:min-w-0 max-md:flex-1 max-md:box-border max-md:shadow-drop-sm`}>
-            <span className="shrink-0">{phase === 'meet' ? 'Meet' : 'Practice'} {step} / {steps}</span>
+            <span className="shrink-0">{stepLabel} {step} / {steps}</span>
             <span className="block h-3 w-20 overflow-hidden rounded-pill border-2 border-outline bg-surface-sunk max-md:w-auto max-md:flex-1">
               <span className="block h-full bg-leaf-500 transition-[width] duration-(--dur-pop) motion-reduce:transition-none" style={{ width: `${(step / steps) * 100}%` }} />
             </span>
@@ -455,6 +523,19 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
                 <span className="text-caption">{feedback.detail}</span>
               </span>
             </output>
+          )}
+
+          {checking && (
+            <div className={`${CARD} max-md:flex-wrap`}>
+              <img src={flagUrl(checking.code)} alt="Flag to find" className={FLAG_IMG} />
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="font-display text-title-2">Do you know this one?</span>
+                <span className="text-body text-fg-muted">Tap its country on the {board}.</span>
+              </span>
+              <button type="button" className={SKIP_BUTTON} disabled={!!feedback} onClick={() => answerCheck(false, { tone: 'hint', title: 'No problem!', detail: "Let's meet this one." })}>
+                Not yet
+              </button>
+            </div>
           )}
 
           {meeting && (
@@ -493,7 +574,7 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
                     key={c.code}
                     aria-label={`Flag of ${c.name}`}
                     disabled={!!feedback}
-                    onClick={() => answer(c === question.target, c.name)}
+                    onClick={() => answer(c.code === question.target.code, c.name)}
                     className={FLAG_CHOICE}
                   >
                     <img src={flagUrl(c.code)} alt="" className="block aspect-[3/2] w-full rounded-sm border-2 border-outline object-cover" />
@@ -511,7 +592,7 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
             <div className="flex flex-col gap-1.5 text-center">
               <h2 className="m-0 font-display text-title-1">Learn flags</h2>
               <p className="m-0 text-body-lg text-fg-muted">
-                Meet {BATCH} countries and their flags. Then find them on the {board}.
+                First a quick check. Then meet the flags you don't know yet and find them on the {board}.
               </p>
               {!world && <p className="m-0 text-body text-fg-muted">Loading map…</p>}
             </div>
@@ -529,19 +610,6 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
                     <span className="text-caption">{counts[i + 1]}</span>
                   </span>
                 ))}
-              </div>
-            )}
-            {batch.fresh.length > 0 && (
-              <div className="flex flex-col gap-3">
-                <span className="text-center text-label">Up next</span>
-                <ul className="m-0 grid list-none grid-cols-4 gap-3 p-0 max-md:grid-cols-2">
-                  {batch.fresh.map(t => (
-                    <li key={t.code} className="flex flex-col items-center gap-2 rounded-md border-3 border-outline bg-surface-sunk p-3 text-center">
-                      <img src={flagUrl(t.code)} alt="" className="block h-12 w-18 rounded-sm border-2 border-outline object-cover" />
-                      <span className="text-caption">{t.name}</span>
-                    </li>
-                  ))}
-                </ul>
               </div>
             )}
             {batch.review.length > 0 && (
@@ -566,16 +634,17 @@ export function Learn({ view, viewSwitch }: { view: LearnView; viewSwitch?: Reac
 
       {phase === 'done' && (
         <div className="absolute inset-0 z-2 grid place-items-center bg-scrim p-4 max-md:grid-cols-1">
-          <section className="box-border flex w-[560px] max-w-full flex-col gap-4 rounded-lg border-3 border-outline bg-surface p-7 text-center text-fg shadow-drop-lg max-md:max-h-full max-md:overflow-y-auto max-md:p-5">
+          <section className="box-border flex w-[560px] max-w-full flex-col gap-4 rounded-lg border-3 border-outline bg-surface p-7 text-center text-fg shadow-drop-lg max-h-full overflow-y-auto max-md:p-5">
             <div className="flex items-end justify-center gap-1.5">
               <StarIcon size={44} /><StarIcon size={60} /><StarIcon size={44} />
             </div>
             <h2 className="m-0 font-display text-title-1">Great job!</h2>
             <p className="m-0 text-body-lg">
-              {fresh.length ? `You met ${fresh.length} new ${countries(fresh.length)}.` : `You practiced ${session.length} ${countries(session.length)}.`}
+              {knew.length > 0 && `You already knew ${knew.length}! `}
+              {fresh.length ? `You met ${fresh.length} new ${countries(fresh.length)}.` : session.length ? `You practiced ${session.length} ${countries(session.length)}.` : ''}
             </p>
             <ul className="m-0 flex list-none flex-col gap-2 p-0 text-left">
-              {session.map(t => (
+              {[...knew, ...session].map(t => (
                 <li key={t.code} className="flex items-center gap-3 rounded-md border-3 border-outline bg-surface-sunk px-3 py-2">
                   <img src={flagUrl(t.code)} alt="" className="block h-10 w-15 shrink-0 rounded-sm border-2 border-outline object-cover" />
                   <span className="min-w-0 flex-1 text-body font-bold">{t.name}</span>
