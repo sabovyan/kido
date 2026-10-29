@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { HeadContent, Link, Outlet, Scripts, createRootRoute } from '@tanstack/react-router';
 import appCss from '../styles.css?url';
 import { ThemeToggle, themeInitScript } from '../ThemeToggle';
-import { CompassIcon, NavMenu, TargetIcon } from '../NavMenu';
+import { BookIcon, CompassIcon, NavMenu, TargetIcon } from '../NavMenu';
 
 export const Route = createRootRoute({
   head: () => ({
@@ -48,6 +48,9 @@ function RootLayout() {
         <nav aria-label="Main" className="flex gap-2 rounded-pill bg-surface-sunk p-1.5 max-md:hidden">
           <Link to="/country/discover" className={NAV_LINK} activeProps={{ className: 'bg-ocean-500 text-on-ocean' }}>
             <CompassIcon />Discover
+          </Link>
+          <Link to="/country/learn" className={NAV_LINK} activeProps={{ className: 'bg-ocean-500 text-on-ocean' }}>
+            <BookIcon />Learn
           </Link>
           <Link to="/country/games" className={NAV_LINK} activeProps={{ className: 'bg-ocean-500 text-on-ocean' }}>
             <TargetIcon />Games
