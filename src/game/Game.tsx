@@ -2,75 +2,30 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from '@tanstack/react-router';
 import * as d3 from 'd3';
-import type { Polygon } from 'geojson';
 import { flagUrl, loadUserCountry, loadWorld, type Country, type World } from '../countries';
 import type { Focus } from './board';
 import { FlatBoard } from './FlatBoard';
 import { GlobeBoard } from './GlobeBoard';
-import { huntMiss, loadProgress, saveProgress } from './learnSession';
+import { ArrowRightIcon, CheckIcon, StarIcon, XIcon } from './icons';
+import { huntMiss, loadProgress, saveProgress, shuffle } from './learnSession';
 import type { Paint } from './painter';
-import { FLAG_RECOGNITION } from './recognition';
+import { buildTargets, chapterOf, sovereignOf, type Target, withPaint } from './targets';
+import { CHIP, ICON_BUTTON } from './ui';
 
 type Phase = 'start' | 'playing' | 'feedback' | 'over';
 type Mode = 'easy' | 'medium' | 'hard';
 type Feedback = { ok: boolean; title: string; detail: string };
 export type GameView = 'map' | 'globe';
 
-type Target = {
-  code: string;
-  name: string;
-  features: Country[];
-  center: [number, number];
-  area: number;
-};
-
 const LIVES = 3;
 const EARTH_RADIUS_KM = 6371;
-// ~5,000 km², in steradians. Keeps hard-to-click specks out of Easy.
-const EASY_MIN_AREA = 5_000 / 40_589_000;
 
 // `phone`: on phones Easy is the one main (sun) action and the others are plain rows.
 const MODES: { mode: Mode; label: string; blurb: string; tint: string; phone: string; includes: (t: Target) => boolean }[] = [
-  { mode: 'easy', label: 'Easy', blurb: 'Big countries, famous flags', tint: 'bg-tint-correct text-on-tint-correct', phone: 'max-md:border-on-sun max-md:bg-sun-400 max-md:text-on-sun', includes: t => (FLAG_RECOGNITION[t.code] ?? 0) >= 75 && t.area >= EASY_MIN_AREA },
-  { mode: 'medium', label: 'Medium', blurb: 'More flags to spot', tint: 'bg-tint-hint text-on-tint-hint', phone: 'max-md:bg-surface max-md:text-fg', includes: t => (FLAG_RECOGNITION[t.code] ?? 0) >= 60 },
+  { mode: 'easy', label: 'Easy', blurb: 'Big countries, famous flags', tint: 'bg-tint-correct text-on-tint-correct', phone: 'max-md:border-on-sun max-md:bg-sun-400 max-md:text-on-sun', includes: t => chapterOf(t) === 0 },
+  { mode: 'medium', label: 'Medium', blurb: 'More flags to spot', tint: 'bg-tint-hint text-on-tint-hint', phone: 'max-md:bg-surface max-md:text-fg', includes: t => chapterOf(t) <= 1 },
   { mode: 'hard', label: 'Hard', blurb: 'Every flag, tiny islands too', tint: 'bg-tint-oops text-on-tint-oops', phone: 'max-md:bg-surface max-md:text-fg', includes: () => true },
 ];
-
-// Territories whose clicks count for their sovereign country's flag.
-const SOVEREIGN: Record<string, string> = { gl: 'dk' };
-const sovereignOf = (code: string | null) => (code && SOVEREIGN[code]) ?? code;
-
-function largestPolygon(f: Country): Polygon {
-  if (f.geometry.type === 'Polygon') return f.geometry;
-  let best: Polygon = { type: 'Polygon', coordinates: f.geometry.coordinates[0] };
-  for (const coords of f.geometry.coordinates) {
-    const poly: Polygon = { type: 'Polygon', coordinates: coords };
-    if (d3.geoArea(poly) > d3.geoArea(best)) best = poly;
-  }
-  return best;
-}
-
-// Groups features by flag code; the biggest feature with that exact code names the
-// country (e.g. "au" is Australia, not Ashmore and Cartier Is.; "dk" is Denmark, not Greenland).
-function buildTargets(world: World) {
-  const byCode = new Map<string, Country[]>();
-  for (const f of world.features) {
-    const code = sovereignOf(f.properties.code);
-    if (!code) continue;
-    byCode.set(code, [...(byCode.get(code) ?? []), f]);
-  }
-  return [...byCode].map(([code, features]): Target => {
-    const own = features.filter(f => f.properties.code === code);
-    const main = d3.greatest(own.length ? own : features, f => d3.geoArea(f))!;
-    return {
-      code,
-      features,
-      name: main.properties.name,
-      center: d3.geoCentroid(largestPolygon(main)),
-      area: d3.sum(features, f => d3.geoArea(f)),
-    };
-  });
-}
 
 function formatPercent(share: number) {
   const pct = share * 100;
@@ -86,31 +41,14 @@ const SMALL_BUTTON = 'inline-flex h-tap-min shrink-0 items-center gap-2 self-cen
 const HEARTS = Array.from({ length: LIVES }, (_, i) => `heart-${i}`);
 const STARS = ['star-1', 'star-2', 'star-3'];
 
-const CHIP = 'flex h-tap-min items-center gap-2 rounded-pill border-3 px-4';
 // On phones the chips sit borderless inside one score bar sticker.
 const IN_BAR = 'max-md:h-auto max-md:border-0 max-md:bg-transparent max-md:px-0';
 const MODE_CARD = 'max-md:min-h-18 max-md:flex-row max-md:items-center max-md:gap-3 max-md:px-4 max-md:py-3 max-md:disabled:border-outline max-md:disabled:bg-surface-sunk max-md:disabled:text-fg-muted flex cursor-pointer flex-col items-start gap-2 rounded-lg border-3 border-outline p-[18px] text-left font-body shadow-drop-lg transition-transform duration-(--dur-tap) hover:-translate-y-0.5 active:translate-y-[5px] active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 disabled:cursor-default disabled:border-dashed disabled:bg-surface-sunk disabled:text-fg-muted disabled:shadow-none disabled:hover:translate-y-0';
-
-function ArrowRightIcon() {
-  return (
-    <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 12h14M13 6l6 6-6 6" />
-    </svg>
-  );
-}
 
 function HeartIcon({ lost }: { lost: boolean }) {
   return (
     <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinejoin="round" className={lost ? 'fill-surface-sunk stroke-fg-muted' : 'fill-coral-500 stroke-on-coral'}>
       <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />
-    </svg>
-  );
-}
-
-function StarIcon({ size = 24 }: { size?: number }) {
-  return (
-    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" strokeWidth="2.5" strokeLinejoin="round" className="fill-sun-400 stroke-on-sun">
-      <path d="M12 3l2.7 5.6 6.1.8-4.4 4.2 1.1 6.1L12 16.8l-5.5 2.9 1.1-6.1-4.4-4.2 6.1-.8z" />
     </svg>
   );
 }
@@ -132,43 +70,9 @@ function FlagIcon() {
   );
 }
 
-function CheckIcon() {
-  return (
-    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 12l5 5L20 7" />
-    </svg>
-  );
-}
-
-function XIcon() {
-  return (
-    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 6l12 12M18 6L6 18" />
-    </svg>
-  );
-}
-
 function listNames(targets: Target[], max = 5) {
   const names = targets.slice(0, max).map(t => t.name).join(', ');
   return targets.length > max ? `${names} and ${targets.length - max} more` : names;
-}
-
-function withPaint(paints: Map<Country, Paint>, features: Country[], paint: Paint | null) {
-  const next = new Map(paints);
-  for (const f of features) {
-    if (paint) next.set(f, paint);
-    else next.delete(f);
-  }
-  return next;
-}
-
-function shuffle<T>(items: T[]) {
-  const a = [...items];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
 }
 
 export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactNode }) {
@@ -342,7 +246,7 @@ export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactN
       {phase !== 'start' && (
         <div className="absolute top-4 right-4 z-1 flex flex-wrap justify-end gap-3 max-md:top-3 max-md:right-3 max-md:left-3 max-md:flex-nowrap max-md:justify-start">
           {inGame && (
-            <button type="button" aria-label="Stop game" onClick={stop} className="grid size-tap-icon shrink-0 cursor-pointer place-items-center rounded-md border-3 border-outline bg-surface p-0 text-fg shadow-drop-sm transition-transform duration-(--dur-tap) active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 md:hidden">
+            <button type="button" aria-label="Stop game" onClick={stop} className={`${ICON_BUTTON} md:hidden`}>
               <XIcon />
             </button>
           )}
