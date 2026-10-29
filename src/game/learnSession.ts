@@ -1,5 +1,6 @@
 // Pure session logic for Learn (Learn.tsx): who joins a session, what gets asked on the map,
-// and how answers change a country's sticker level (0 new, 1 met, 2 known, 3 mastered).
+// how answers change a country's sticker level (0 new, 1 met, 2 known, 3 mastered),
+// and when each country comes back.
 
 // How a country is asked: find it with its name shown, find it from its flag only,
 // or pick its flag while the country is highlighted.
@@ -8,6 +9,71 @@ export type Asked<T> = { target: T; kind: Kind; retry?: boolean };
 
 // Countries that join a session besides the new ones, unless there are more reviews than this.
 export const MAX_EXTRAS = 2;
+// New countries per session, at most.
+export const BATCH = 4;
+// The memory game takes up to 6 countries, so new ones plus reviews stay within this.
+export const SESSION_MAX = 6;
+// New countries a session keeps room for, however many reviews are due.
+const MIN_NEW = 2;
+
+// Days until a country comes back, by the level it just reached. A right answer while it
+// was already Mastered waits the last one.
+export const INTERVAL_DAYS = [0, 1, 3, 7, 21];
+
+// A country's sticker level, when it was last answered and when it's due again (ms).
+export type Card = { level: number; lastSeen: number; due: number };
+export type Progress = Record<string, Card>;
+
+export const levelOf = (progress: Progress, code: string) => progress[code]?.level ?? 0;
+
+// Midnight at the start of the day `days` after `now`, so a country met in the evening
+// is ready the next morning.
+export function addDays(now: number, days: number) {
+  const d = new Date(now);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days).getTime();
+}
+
+// Saves used to keep a bare level per code: those become cards that are due now.
+export function readProgress(saved: unknown, now: number): Progress {
+  if (!saved || typeof saved !== 'object') return {};
+  const progress: Progress = {};
+  for (const [code, value] of Object.entries(saved)) {
+    if (typeof value === 'number') {
+      if (value > 0) progress[code] = { level: value, lastSeen: now, due: now };
+    } else if (value && typeof value.level === 'number' && typeof value.due === 'number') {
+      progress[code] = { level: value.level, lastSeen: value.lastSeen ?? value.due, due: value.due };
+    }
+  }
+  return progress;
+}
+
+// The card after an answer that leaves the country at `level`. A miss is due now. A level up
+// waits that level's interval; so does a right answer on a due country. A right answer on one
+// that isn't due yet (asked again in the same session) keeps its date.
+export function schedule(card: Card | undefined, level: number, ok: boolean, now: number): Card {
+  const before = card?.level ?? 0;
+  if (!ok) return { level, lastSeen: now, due: now };
+  if (level > before) return { level, lastSeen: now, due: addDays(now, INTERVAL_DAYS[level]) };
+  if (card && card.due <= now) {
+    const days = before === 3 && level === 3 ? INTERVAL_DAYS[4] : INTERVAL_DAYS[level];
+    return { level, lastSeen: now, due: addDays(now, days) };
+  }
+  return { level, lastSeen: now, due: card?.due ?? now };
+}
+
+// Countries met before that are due, most overdue first (learn order on a tie).
+export function dueTargets<T extends { code: string }>(order: T[], progress: Progress, now: number) {
+  return order
+    .filter(t => levelOf(progress, t.code) > 0 && progress[t.code].due <= now)
+    .sort((a, b) => progress[a.code].due - progress[b.code].due);
+}
+
+// Due reviews first, then new countries, SESSION_MAX in all. The more are due, the fewer new
+// ones join (never fewer than MIN_NEW while there are any); due ones that don't fit wait.
+export function pickSession<T>(due: T[], fresh: T[]) {
+  const newCount = Math.min(fresh.length, BATCH, Math.max(MIN_NEW, SESSION_MAX - due.length));
+  return { fresh: fresh.slice(0, newCount), reviews: due.slice(0, SESSION_MAX - newCount) };
+}
 
 export function shuffle<T>(items: T[], random = Math.random) {
   const a = [...items];
