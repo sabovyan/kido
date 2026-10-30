@@ -56,6 +56,8 @@ The `text-*` size classes set line height and weight too; override with `leading
 
 ## Space, shape, motion
 
+The `src/ui` primitives already apply the outline, radius, drop and press motion below; use them instead of repeating these classes on buttons, cards, chips or toasts (see `recipes.md`).
+
 - Spacing: Tailwind's 4px scale (`--spacing: 4px`): `1`=4, `2`=8, `3`=12, `4`=16, `6`=24, `8`=32, `12`=48, `16`=64.
 - Tap sizes: `tap-min` 48px, `tap-icon` 56px, `tap-main` 64px (`h-tap-main`, `size-tap-icon`, `min-h-tap-min`).
 - Radius: `rounded-sm` 12, `rounded-md` 16, `rounded-lg` 24, `rounded-pill` 999.
