@@ -1,6 +1,7 @@
 import { Link, createFileRoute } from '@tanstack/react-router';
 import { FlatMap } from '../../FlatMap';
 import { Globe } from '../../Globe';
+import { SegmentedSwitch } from '../../ui/SegmentedSwitch';
 
 type DiscoverSearch = { view?: 'globe' };
 
@@ -11,10 +12,6 @@ export const Route = createFileRoute('/country/discover')({
   component: CountryDiscover,
 });
 
-const OPTION = 'inline-flex h-tap-min items-center gap-2 rounded-sm px-4 font-body text-label no-underline transition-colors duration-(--dur-tap) motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500';
-const SELECTED = `${OPTION} bg-ocean-500 text-on-ocean`;
-const UNSELECTED = `${OPTION} text-fg hover:bg-surface-sunk`;
-
 function CountryDiscover() {
   const { view } = Route.useSearch();
   const isGlobe = view === 'globe';
@@ -22,10 +19,11 @@ function CountryDiscover() {
   return (
     <div className="box-border h-full bg-page">
       <div className={`relative box-border h-full overflow-hidden ${isGlobe ? 'bg-backdrop' : 'bg-map-sea'}`}>
-        <nav aria-label="View" className="absolute top-4 left-4 z-3 inline-flex gap-1 rounded-md border-3 border-outline bg-surface p-1 shadow-drop-sm">
-          <Link from={Route.fullPath} search={{}} activeProps={{}} aria-current={isGlobe ? undefined : 'page'} className={isGlobe ? UNSELECTED : SELECTED}>Map</Link>
-          <Link from={Route.fullPath} search={{ view: 'globe' }} activeProps={{}} aria-current={isGlobe ? 'page' : undefined} className={isGlobe ? SELECTED : UNSELECTED}>Globe</Link>
-        </nav>
+        {/* Not `ViewSwitch`: here the map is the default and the globe sets `view`. `exact` so the Map link isn't also current on the globe. */}
+        <SegmentedSwitch render={<nav aria-label="View" />} className="absolute top-4 left-4 z-3">
+          <SegmentedSwitch.Item render={<Link from={Route.fullPath} search={{}} activeProps={{}} activeOptions={{ exact: true }} aria-current={isGlobe ? undefined : 'page'} />}>Map</SegmentedSwitch.Item>
+          <SegmentedSwitch.Item render={<Link from={Route.fullPath} search={{ view: 'globe' }} activeProps={{}} activeOptions={{ exact: true }} aria-current={isGlobe ? 'page' : undefined} />}>Globe</SegmentedSwitch.Item>
+        </SegmentedSwitch>
         {isGlobe ? <Globe /> : <FlatMap />}
       </div>
     </div>

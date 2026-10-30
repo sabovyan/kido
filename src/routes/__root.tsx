@@ -2,7 +2,9 @@ import type { ReactNode } from 'react';
 import { HeadContent, Link, Outlet, Scripts, createRootRoute } from '@tanstack/react-router';
 import appCss from '../styles.css?url';
 import { ThemeToggle, themeInitScript } from '../ThemeToggle';
-import { BookIcon, CompassIcon, NavMenu, TargetIcon } from '../NavMenu';
+import { NavMenu } from '../NavMenu';
+import { BookIcon, CompassIcon, FlagIcon, TargetIcon } from '../ui/icons';
+import { PillTabs } from '../ui/PillTabs';
 
 export const Route = createRootRoute({
   head: () => ({
@@ -23,17 +25,6 @@ export const Route = createRootRoute({
   component: RootLayout,
 });
 
-const NAV_LINK = 'flex h-tap-min items-center gap-2 rounded-pill px-5 text-label text-fg no-underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500';
-
-function FlagIcon() {
-  return (
-    <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 21V4" />
-      <path d="M5 4h11l-2 4 2 4H5" />
-    </svg>
-  );
-}
-
 function RootLayout() {
   return (
     // `group/app` lets the phone chrome hide itself while a game is being played.
@@ -45,17 +36,17 @@ function RootLayout() {
           </span>
           <span>Flag Map<span className="max-md:hidden"> of the World</span></span>
         </h1>
-        <nav aria-label="Main" className="flex gap-2 rounded-pill bg-surface-sunk p-1.5 max-md:hidden">
-          <Link to="/country/discover" className={NAV_LINK} activeProps={{ className: 'bg-ocean-500 text-on-ocean' }}>
+        <PillTabs aria-label="Main" className="max-md:hidden">
+          <PillTabs.Item render={<Link to="/country/discover" activeProps={{}} />}>
             <CompassIcon />Discover
-          </Link>
-          <Link to="/country/learn" className={NAV_LINK} activeProps={{ className: 'bg-ocean-500 text-on-ocean' }}>
+          </PillTabs.Item>
+          <PillTabs.Item render={<Link to="/country/learn" activeProps={{}} />}>
             <BookIcon />Learn
-          </Link>
-          <Link to="/country/games" className={NAV_LINK} activeProps={{ className: 'bg-ocean-500 text-on-ocean' }}>
+          </PillTabs.Item>
+          <PillTabs.Item render={<Link to="/country/games" activeProps={{}} />}>
             <TargetIcon />Games
-          </Link>
-        </nav>
+          </PillTabs.Item>
+        </PillTabs>
         <div className="ml-auto flex items-center gap-3">
           {/* Desktop: Flag Hunt portals its score chips here while a game is being played. */}
           <div id="game-hud" className="contents max-md:hidden" />
