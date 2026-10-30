@@ -20,9 +20,10 @@ The look of Flag Map of the World: bright, chunky, rounded, like toy blocks and 
 
 ## Rules
 
+0. **Use `src/ui` primitives.** `Button`, `IconButton`, `Card`, `Overlay`, `Feedback`, `Chip`, `ProgressBar`, `Flag`, `SegmentedSwitch`, `PillTabs` and the icons in `src/ui/icons.tsx` already carry the sticker edge, tap sizes, focus ring and press motion. For a new look, add a variant to the primitive and its story. Never style a button, card or toast inline. Check UI in Storybook (`bun run storybook`), in Day and Night; every primitive has a story there.
 1. **Tokens only.** Use the token classes in `references/tokens.md` (`bg-surface`, `text-fg`, `border-outline`, `shadow-drop-md`, `text-title-2`, `rounded-lg`...). No raw hex values, no arbitrary colors (`bg-[#...]`), no Tailwind palette colors (`bg-blue-500`). Need a new token? Add it to `src/styles.css` in both Day and Night, then use it.
 2. **Both themes, always.** Semantic tokens switch automatically between Day and Night. Brand fills (`ocean`, `sun`, `leaf`, `coral`, `grape`) stay the same in both; text on them uses the matching `on-*` color. Use `dark:` only for genuine exceptions. Check every new UI in both themes.
-3. **The sticker edge.** Anything a kid can touch: `border-3 border-outline` plus a solid `shadow-drop-*` (never a blurred shadow). Pressed sinks: `active:translate-y-[5px] active:shadow-none`. Cards: `rounded-lg`; buttons and toasts: `rounded-md`; chips and tabs: `rounded-pill`. Grouped controls (segmented switches, toolbars) are ONE sticker: the container gets the outline and drop, the items inside are borderless and only the selected one is filled.
+3. **The sticker edge.** The primitives carry it; this is what a new variant must match. Anything a kid can touch: `border-3 border-outline` plus a solid `shadow-drop-*` (never a blurred shadow). Pressed sinks: `active:translate-y-[5px] active:shadow-none`. Cards: `rounded-lg`; buttons and toasts: `rounded-md`; chips and tabs: `rounded-pill`. Grouped controls (segmented switches, toolbars) are ONE sticker: the container gets the outline and drop, the items inside are borderless and only the selected one is filled.
 4. **Tap sizes.** Minimum 48px (`h-tap-min`), icon buttons and tabs 56px (`size-tap-icon`), main actions 64px tall (`h-tap-main`). At least 12px (`gap-3`) between tappable things.
 5. **Type.** `font-display` (Baloo 2) for titles, buttons and numbers; `font-body` (Nunito) for text. Body text 18px (`text-body`) or larger; never below 15px (`text-caption`). Line length ~60 characters max; game prompts two lines max. Sentence case. Scores and counters use `tabular-nums`.
 6. **One big action per screen.** Only one `bg-sun-400` "do this now" button per view. Ocean = continue, surface/white = the other choice. Settings (theme, sound, language) stay quiet: a corner icon button (`size-tap-icon`) that opens or flips the setting, never bigger or louder than the screen's navigation or main action.
@@ -32,7 +33,7 @@ The look of Flag Map of the World: bright, chunky, rounded, like toy blocks and 
 10. **Kind copy.** Short words a 7-year-old knows, digits for numbers, encourage instead of judging.
     - Do: "Oops, that's Spain! France is right next door." / "Yes! France — flag painted."
     - Don't: "Incorrect." / "Error: invalid selection." / "Game over, you failed."
-11. **Accessible markup.** Real `<button>`, `<a href>`, `<label>`; never `onClick` on a `div`. Visible focus ring on everything focusable (`focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500`).
+11. **Accessible markup.** Real `<button>`, `<a href>`, `<label>`; never `onClick` on a `div`. Visible focus ring on everything focusable: the primitives have it; anything else focusable adds `FOCUS_RING` from `src/ui/focus.ts`.
 
 ## Existing code
 
@@ -41,4 +42,4 @@ The current screens still use the older hand-written classes in `src/styles.css`
 ## References
 
 - `references/tokens.md` — every token, its Tailwind class and its Day/Night value.
-- `references/recipes.md` — copy-ready Tailwind markup for buttons, chips, cards, toasts, the question card, tabs, the segmented switch, theme switch placement, and Base UI patterns. Read it before building any control; if no recipe fits, start from the closest one and match the canvas.
+- `references/recipes.md` — which `src/ui` primitive to use for buttons, chips, cards, toasts, the question card, tabs, the segmented switch, theme switch placement, and Base UI patterns. Read it before building any control; if no primitive fits, add a variant (and its story) to the closest one and match the canvas.
