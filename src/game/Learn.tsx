@@ -1,26 +1,29 @@
-import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Collapsible } from '@base-ui/react/collapsible';
-import { Link } from '@tanstack/react-router';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { loadUserCountry, loadWorld, type Country, type World } from '../countries';
-import { factsOf } from '../data/facts';
 import { SoundToggle } from '../SoundToggle';
 import { speak } from '../speech';
-import { Button } from '../ui/Button';
-import { Card } from '../ui/Card';
-import { Chip, type ChipProps } from '../ui/Chip';
+import { Chip } from '../ui/Chip';
 import { Feedback as FeedbackToast } from '../ui/Feedback';
-import { Flag } from '../ui/Flag';
-import { FOCUS_RING } from '../ui/focus';
 import { IconButton } from '../ui/IconButton';
-import { ArrowRightIcon, ChevronIcon, StarIcon, XIcon } from '../ui/icons';
+import { XIcon } from '../ui/icons';
 import { Overlay } from '../ui/Overlay';
 import { ProgressBar } from '../ui/ProgressBar';
 import type { Focus } from './board';
+import { CheckCard } from './CheckCard';
+import { CountryCard } from './CountryCard';
+import { FindCard } from './FindCard';
 import { FlagJigsaw } from './FlagJigsaw';
 import { FlatBoard } from './FlatBoard';
 import { GlobeBoard } from './GlobeBoard';
+import { LearnDoneCard } from './LearnDoneCard';
+import { LearnHuntCard } from './LearnHuntCard';
+import { LearnStartCard } from './LearnStartCard';
 import { type Asked, BATCH, buildQuestions, dueTargets, levelAfter, levelOf, loadProgress, pickCodes, pickSession, type Progress, saveProgress, schedule, SESSION_MAX, sessionExtras, shuffle } from './learnSession';
+import { LEVELS } from './LevelList';
+import { MatchCard } from './MatchCard';
 import { MemoryMatch } from './MemoryMatch';
+import { PickFlagCard } from './PickFlagCard';
+import { QuestionDock } from './QuestionDock';
 import type { Paint } from './painter';
 import { FLAG_RECOGNITION } from './recognition';
 import { buildTargets, chapterOf, sovereignOf, type Target, withPaint } from './targets';
@@ -35,13 +38,6 @@ type Question = Asked<Target>;
 
 // The quick check keeps asking new flags until the session's new ones are unknown, up to this many.
 const MAX_CHECKS = 8;
-
-const LEVELS: { label: string; tone: ChipProps['tone'] }[] = [
-  { label: 'New', tone: 'sunk' },
-  { label: 'Met', tone: 'tint-hint' },
-  { label: 'Known', tone: 'tint-correct' },
-  { label: 'Mastered', tone: 'tint-reward' },
-];
 
 // The player's own country first, then Easy → Medium → Hard, best-known flags first.
 function learnOrder(targets: Target[], homeCode: string | null) {
@@ -78,105 +74,8 @@ function knownPaints(order: Target[], progress: Progress, skip: Set<string>) {
   return paints;
 }
 
-// Neighbours' names, best-known first (`order` puts famous flags first): up to 4 names,
-// or 3 and how many more.
-function neighbourNames(codes: string[], order: Target[]) {
-  const names = order.filter(t => codes.includes(t.code)).map(t => t.name);
-  if (names.length <= 1) return names[0];
-  if (names.length <= 4) return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
-  return `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`;
-}
-
-// Phones get a "Fun facts" switch so the card covers no more of the map than before.
-const WIDE = '(min-width: 768px)';
-const onWideChange = (onChange: () => void) => {
-  const media = window.matchMedia(WIDE);
-  media.addEventListener('change', onChange);
-  return () => media.removeEventListener('change', onChange);
-};
-const useWide = () => useSyncExternalStore(onWideChange, () => window.matchMedia(WIDE).matches, () => true);
-
-const countries = (n: number) => (n === 1 ? 'country' : 'countries');
-const flags = (n: number) => (n === 1 ? 'flag' : 'flags');
-
-// A flag answer: a big sticker button holding a flag. No primitive has its square, padded shape.
-const FLAG_CHOICE = `grid cursor-pointer place-items-center rounded-md border-3 border-outline bg-surface p-2 shadow-drop-md transition-transform duration-(--dur-tap) hover:-translate-y-0.5 active:translate-y-[5px] active:shadow-none motion-reduce:transition-none ${FOCUS_RING} disabled:cursor-default disabled:shadow-none disabled:hover:translate-y-0`;
-
 // The progress chip's word for each step of a session.
 const STEP_LABELS: Partial<Record<Phase, string>> = { check: 'Check', meet: 'Meet', build: 'Build', match: 'Match', practice: 'Practice' };
-
-function LevelChip({ level }: { level: number }) {
-  const { label, tone } = LEVELS[level] ?? LEVELS[0];
-  return (
-    <Chip size="sm" tone={tone}>
-      {level === 3 && <StarIcon size={16} />}
-      {label}
-    </Chip>
-  );
-}
-
-// The meet step: flag, name and a few easy facts. Rows the dataset doesn't have are left out.
-function CountryCard({ target, order, board, open, onOpenChange, saidHi, onNext }: {
-  target: Target;
-  order: Target[];
-  board: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  saidHi: boolean;
-  onNext: () => void;
-}) {
-  const wide = useWide();
-  const facts = factsOf(target.code);
-  const neighbours = facts && neighbourNames(facts.neighbours, order);
-  const rows = facts
-    ? [
-      { label: 'Continent', value: facts.continent },
-      { label: 'Capital', value: facts.capital },
-      { label: 'Flag', value: facts.flag },
-      { label: facts.neighbours.length === 1 ? 'Neighbour' : 'Neighbours', value: neighbours },
-    ].filter(r => r.value)
-    : [];
-  const next = (
-    <Button variant="continue" size="md" fill disabled={saidHi} onClick={onNext}>
-      Next <ArrowRightIcon />
-    </Button>
-  );
-
-  return (
-    <Collapsible.Root open={wide || open} onOpenChange={onOpenChange} render={<Card padding="sm" className="flex flex-col items-stretch gap-4" />}>
-      <div className="flex items-center gap-4">
-        <Flag code={target.code} alt={`Flag of ${target.name}`} className="md:h-20 md:w-30" />
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="font-display text-title-2">This is {target.name}</span>
-          <span className="text-body text-fg-muted">Tap it on the {board} to say hi.</span>
-        </span>
-        {wide && next}
-      </div>
-      {rows.length > 0 && (
-        <Collapsible.Panel className="max-h-[40dvh] overflow-y-auto rounded-md bg-surface-sunk px-4 py-3">
-          <dl className="m-0 grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1">
-            {rows.map(r => (
-              <Fragment key={r.label}>
-                <dt className="text-caption text-fg-muted">{r.label}</dt>
-                <dd className="m-0 text-body">{r.value}</dd>
-              </Fragment>
-            ))}
-          </dl>
-        </Collapsible.Panel>
-      )}
-      {!wide && (
-        <div className="grid auto-cols-fr grid-flow-col gap-3">
-          {rows.length > 0 && (
-            <Collapsible.Trigger render={<Button size="md" fill className="[&[data-panel-open]_svg]:rotate-180" />}>
-              Fun facts <ChevronIcon />
-            </Collapsible.Trigger>
-          )}
-          {next}
-        </div>
-      )}
-    </Collapsible.Root>
-  );
-}
 
 const NO_CODES: string[] = [];
 
@@ -513,20 +412,16 @@ export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView;
         : <FlatBoard world={world} paints={paints} focus={focus} onPick={onPick} />)}
 
       {inSession && (
-        <div className="absolute bottom-6 left-1/2 flex w-[560px] max-w-[calc(100%-32px)] -translate-x-1/2 flex-col gap-3 max-md:right-3 max-md:bottom-[max(16px,env(safe-area-inset-bottom))] max-md:left-3 max-md:w-auto max-md:max-w-none max-md:translate-x-0">
+        <QuestionDock>
           {feedback && <FeedbackToast raised tone={feedback.tone} title={feedback.title} detail={feedback.detail} />}
 
           {checking && (
-            <Card padding="sm" className="flex items-center gap-4 max-md:flex-wrap">
-              <Flag code={checking.code} alt="Flag to find" />
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="font-display text-title-2">Do you know this one?</span>
-                <span className="text-body text-fg-muted">Tap its country on the {board}.</span>
-              </span>
-              <Button size="md" fill disabled={!!feedback} onClick={() => answerCheck(false, { tone: 'hint', title: 'No problem!', detail: "Let's meet this one." })}>
-                Not yet
-              </Button>
-            </Card>
+            <CheckCard
+              code={checking.code}
+              board={board}
+              disabled={!!feedback}
+              onNotYet={() => answerCheck(false, { tone: 'hint', title: 'No problem!', detail: "Let's meet this one." })}
+            />
           )}
 
           {meeting && (
@@ -542,38 +437,17 @@ export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView;
           )}
 
           {question && question.kind !== 'pick' && (
-            <Card padding="sm" className="flex items-center gap-4">
-              <Flag code={question.target.code} alt="Flag to find" />
-              <span className="flex flex-col gap-0.5">
-                <span className="font-display text-title-2">{question.kind === 'name' ? `Find ${question.target.name}` : 'Find this country'}</span>
-                <span className="text-body text-fg-muted">{question.kind === 'name' ? `Tap it on the ${board}.` : 'No name this time!'}</span>
-              </span>
-            </Card>
+            <FindCard code={question.target.code} name={question.kind === 'name' ? question.target.name : undefined} board={board} />
           )}
 
           {question?.kind === 'pick' && (
-            <Card padding="sm" className="flex flex-col items-stretch gap-4">
-              <span className="flex flex-col gap-0.5">
-                <span className="font-display text-title-2">Which flag is this country's?</span>
-                <span className="text-body text-fg-muted">Look at the yellow country.</span>
-              </span>
-              <div className="grid grid-cols-3 gap-3">
-                {choices.map(c => (
-                  <button
-                    type="button"
-                    key={c.code}
-                    aria-label={`Flag of ${c.name}`}
-                    disabled={!!feedback}
-                    onClick={() => answer(c.code === question.target.code, c.name)}
-                    className={FLAG_CHOICE}
-                  >
-                    <Flag code={c.code} size="fill" alt="" />
-                  </button>
-                ))}
-              </div>
-            </Card>
+            <PickFlagCard
+              choices={choices}
+              disabled={!!feedback}
+              onPick={(code, name) => answer(code === question.target.code, name)}
+            />
           )}
-        </div>
+        </QuestionDock>
       )}
 
       {/* Build and match sit over the map; the top padding keeps them clear of the progress chip. */}
@@ -587,127 +461,51 @@ export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView;
 
       {phase === 'match' && (
         <Overlay scroll>
-          <Card padding="md" render={<section />} className="box-border flex w-[680px] max-w-full flex-col items-center gap-4">
-            <div className="flex flex-col gap-0.5 text-center">
-              <h2 className="m-0 font-display text-title-2">Find the pairs</h2>
-              <p className="m-0 text-body text-fg-muted">Match each flag with its country.</p>
-            </div>
+          <MatchCard>
             <MemoryMatch key={round} countries={session} onMatch={matched} onDone={() => startPractice(session)} />
-          </Card>
+          </MatchCard>
         </Overlay>
       )}
 
       {phase === 'start' && showHunt && (
         <Overlay>
-          <Card render={<section />} className="box-border flex w-[560px] max-w-full flex-col gap-[18px] max-md:max-h-full max-md:gap-4 max-md:overflow-y-auto">
-            <div className="flex flex-col gap-1.5 text-center">
-              <h2 className="m-0 font-display text-title-1">Learn {huntSize === 1 ? 'this flag' : 'these flags'}</h2>
-              <p className="m-0 text-body-lg text-fg-muted">
-                From your Flag Hunt. Meet {huntSize === 1 ? 'it' : 'them'}, build {huntSize === 1 ? 'it' : 'them'}{huntSize > 1 ? ', play a memory game' : ''} and find {huntSize === 1 ? 'it' : 'them'} on the {board}.
-              </p>
-              {!world && <p className="m-0 text-body text-fg-muted">Loading map…</p>}
-            </div>
-            {viewSwitch && (
-              <div className="flex items-center justify-center gap-3 md:hidden">
-                <span className="text-label">Learn on</span>
-                {viewSwitch}
-              </div>
-            )}
-            <ul className="m-0 flex list-none flex-col gap-2 p-0 text-left">
-              {hunt.map(t => (
-                <li key={t.code} className="flex items-center gap-3 rounded-md border-3 border-outline bg-surface-sunk px-3 py-2">
-                  <Flag code={t.code} size="sm" alt="" />
-                  <span className="min-w-0 flex-1 text-body font-bold">{t.name}</span>
-                  <LevelChip level={levelOf(progress, t.code)} />
-                </li>
-              ))}
-            </ul>
-            <div className="flex flex-wrap justify-center gap-3 max-md:flex-col">
-              <Button variant="main" fill disabled={!world} onClick={startHunt}>
-                Start learning <ArrowRightIcon />
-              </Button>
-              <Button fill onClick={() => setHuntCodes([])}>Not now</Button>
-            </div>
-          </Card>
+          <LearnHuntCard
+            board={board}
+            loading={!world}
+            viewSwitch={viewSwitch}
+            size={huntSize}
+            countries={hunt.map(t => ({ code: t.code, name: t.name, level: levelOf(progress, t.code) }))}
+            onStart={startHunt}
+            onNotNow={() => setHuntCodes([])}
+          />
         </Overlay>
       )}
 
       {phase === 'start' && !showHunt && (
         <Overlay>
-          <Card render={<section />} className="box-border flex w-[640px] max-w-full flex-col gap-[18px] max-md:max-h-full max-md:gap-4 max-md:overflow-y-auto">
-            <div className="flex flex-col gap-1.5 text-center">
-              <h2 className="m-0 font-display text-title-1">Learn flags</h2>
-              <p className="m-0 text-body-lg text-fg-muted">
-                First a quick check. Then meet new flags, build them, play a memory game and find them on the {board}.
-              </p>
-              {!world && <p className="m-0 text-body text-fg-muted">Loading map…</p>}
-            </div>
-            {viewSwitch && (
-              <div className="flex items-center justify-center gap-3 md:hidden">
-                <span className="text-label">Learn on</span>
-                {viewSwitch}
-              </div>
-            )}
-            {world && (
-              <div className="flex flex-wrap justify-center gap-2 tabular-nums">
-                {LEVELS.slice(1).map((l, i) => (
-                  <span key={l.label} className="inline-flex items-center gap-2">
-                    <LevelChip level={i + 1} />
-                    <span className="text-caption">{counts[i + 1]}</span>
-                  </span>
-                ))}
-              </div>
-            )}
-            {batch.due > 0 && (
-              <p className="m-0 text-center text-body font-bold">
-                {batch.due} {flags(batch.due)} to practice today
-              </p>
-            )}
-            {world && !hasNext && (
-              <p className="m-0 text-center text-body-lg">You know every flag. Amazing!</p>
-            )}
-            <div className="flex flex-wrap justify-center gap-3 max-md:flex-col">
-              {hasNext && (
-                <Button variant="main" fill disabled={!world} onClick={start}>
-                  {counts[1] + counts[2] + counts[3] ? 'Keep learning' : 'Start learning'} <ArrowRightIcon />
-                </Button>
-              )}
-              <Button fill render={<Link to="/country/games" />}>Play Flag Hunt</Button>
-            </div>
-          </Card>
+          <LearnStartCard
+            board={board}
+            loading={!world}
+            viewSwitch={viewSwitch}
+            counts={counts}
+            due={batch.due}
+            hasNext={hasNext}
+            onStart={start}
+          />
         </Overlay>
       )}
 
       {phase === 'done' && (
         <Overlay>
-          <Card render={<section />} className="box-border flex w-[560px] max-w-full flex-col gap-4 text-center max-h-full overflow-y-auto">
-            <div className="flex items-end justify-center gap-1.5">
-              <StarIcon size={44} /><StarIcon size={60} /><StarIcon size={44} />
-            </div>
-            <h2 className="m-0 font-display text-title-1">Great job!</h2>
-            <p className="m-0 text-body-lg">
-              {knew.length > 0 && `You already knew ${knew.length}! `}
-              {fresh.length ? `You met ${fresh.length} new ${countries(fresh.length)}.` : session.length ? `You practiced ${session.length} ${countries(session.length)}.` : ''}
-            </p>
-            <ul className="m-0 flex list-none flex-col gap-2 p-0 text-left">
-              {/* Countries known in the check that also repeated are listed once. */}
-              {[...knew.filter(k => !session.some(s => s.code === k.code)), ...session].map(t => (
-                <li key={t.code} className="flex items-center gap-3 rounded-md border-3 border-outline bg-surface-sunk px-3 py-2">
-                  <Flag code={t.code} size="sm" alt="" />
-                  <span className="min-w-0 flex-1 text-body font-bold">{t.name}</span>
-                  <LevelChip level={levelOf(progress, t.code)} />
-                </li>
-              ))}
-            </ul>
-            <div className="mt-2 flex flex-wrap justify-center gap-3 max-md:flex-col">
-              {hasNext && (
-                <Button variant="main" fill onClick={start}>
-                  Learn {batch.fresh.length || BATCH} more <ArrowRightIcon />
-                </Button>
-              )}
-              <Button fill render={<Link to="/country/games" />}>Play Flag Hunt</Button>
-            </div>
-          </Card>
+          <LearnDoneCard
+            knew={knew.length}
+            met={fresh.length}
+            practiced={session.length}
+            // Countries known in the check that also repeated are listed once.
+            countries={[...knew.filter(k => !session.some(s => s.code === k.code)), ...session].map(t => ({ code: t.code, name: t.name, level: levelOf(progress, t.code) }))}
+            more={hasNext ? batch.fresh.length || BATCH : undefined}
+            onMore={start}
+          />
         </Overlay>
       )}
     </div>
