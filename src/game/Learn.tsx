@@ -1,21 +1,29 @@
 import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Collapsible } from '@base-ui/react/collapsible';
 import { Link } from '@tanstack/react-router';
-import { flagUrl, loadUserCountry, loadWorld, type Country, type World } from '../countries';
+import { loadUserCountry, loadWorld, type Country, type World } from '../countries';
 import { factsOf } from '../data/facts';
 import { SoundToggle } from '../SoundToggle';
 import { speak } from '../speech';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { Chip, type ChipProps } from '../ui/Chip';
+import { Feedback as FeedbackToast } from '../ui/Feedback';
+import { Flag } from '../ui/Flag';
+import { FOCUS_RING } from '../ui/focus';
+import { IconButton } from '../ui/IconButton';
+import { ArrowRightIcon, ChevronIcon, StarIcon, XIcon } from '../ui/icons';
+import { Overlay } from '../ui/Overlay';
+import { ProgressBar } from '../ui/ProgressBar';
 import type { Focus } from './board';
 import { FlagJigsaw } from './FlagJigsaw';
 import { FlatBoard } from './FlatBoard';
 import { GlobeBoard } from './GlobeBoard';
-import { ArrowRightIcon, CheckIcon, StarIcon, XIcon } from './icons';
 import { type Asked, BATCH, buildQuestions, dueTargets, levelAfter, levelOf, loadProgress, pickCodes, pickSession, type Progress, saveProgress, schedule, SESSION_MAX, sessionExtras, shuffle } from './learnSession';
 import { MemoryMatch } from './MemoryMatch';
 import type { Paint } from './painter';
 import { FLAG_RECOGNITION } from './recognition';
 import { buildTargets, chapterOf, sovereignOf, type Target, withPaint } from './targets';
-import { CHIP, ICON_BUTTON } from './ui';
 
 // Each new country: meet it on the map, then build its flag. Then a memory game with every
 // country in the session, then practice on the map.
@@ -28,11 +36,11 @@ type Question = Asked<Target>;
 // The quick check keeps asking new flags until the session's new ones are unknown, up to this many.
 const MAX_CHECKS = 8;
 
-const LEVELS = [
-  { label: 'New', tint: 'bg-surface-sunk text-fg' },
-  { label: 'Met', tint: 'bg-tint-hint text-on-tint-hint' },
-  { label: 'Known', tint: 'bg-tint-correct text-on-tint-correct' },
-  { label: 'Mastered', tint: 'bg-tint-reward text-on-tint-reward' },
+const LEVELS: { label: string; tone: ChipProps['tone'] }[] = [
+  { label: 'New', tone: 'sunk' },
+  { label: 'Met', tone: 'tint-hint' },
+  { label: 'Known', tone: 'tint-correct' },
+  { label: 'Mastered', tone: 'tint-reward' },
 ];
 
 // The player's own country first, then Easy → Medium → Hard, best-known flags first.
@@ -91,51 +99,19 @@ const useWide = () => useSyncExternalStore(onWideChange, () => window.matchMedia
 const countries = (n: number) => (n === 1 ? 'country' : 'countries');
 const flags = (n: number) => (n === 1 ? 'flag' : 'flags');
 
-const BUTTON = 'inline-flex h-tap-main items-center gap-2.5 rounded-md border-3 border-outline px-7 font-display text-title-2 no-underline shadow-drop-md transition-transform duration-(--dur-tap) hover:-translate-y-0.5 active:translate-y-[5px] active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 max-md:box-border max-md:w-full max-md:justify-center';
-const MAIN_BUTTON = `${BUTTON} cursor-pointer bg-sun-400 text-on-sun active:bg-sun-600`;
-const OTHER_BUTTON = `${BUTTON} bg-surface text-fg`;
-const CARD_BUTTON = 'inline-flex h-tap-min shrink-0 cursor-pointer items-center gap-2 rounded-md border-3 border-outline px-5 font-display text-title-3 shadow-drop-sm transition-transform duration-(--dur-tap) active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 disabled:cursor-default disabled:border-dashed disabled:bg-surface-sunk disabled:text-fg-muted disabled:shadow-none max-md:box-border max-md:w-full max-md:justify-center';
-const NEXT_BUTTON = `${CARD_BUTTON} bg-ocean-500 text-on-ocean active:bg-ocean-700`;
-const SKIP_BUTTON = `${CARD_BUTTON} bg-surface text-fg`;
-const FLAG_CHOICE = 'grid cursor-pointer place-items-center rounded-md border-3 border-outline bg-surface p-2 shadow-drop-md transition-transform duration-(--dur-tap) hover:-translate-y-0.5 active:translate-y-[5px] active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 disabled:cursor-default disabled:shadow-none disabled:hover:translate-y-0';
-const CARD = 'flex items-center gap-4 rounded-lg border-3 border-outline bg-surface px-[18px] py-3.5 shadow-drop-lg';
-const FLAG_IMG = 'block h-16 w-24 shrink-0 rounded-sm border-3 border-outline object-cover';
-
-const TONES = {
-  correct: { box: 'bg-tint-correct text-on-tint-correct', badge: 'border-on-leaf bg-leaf-500 text-on-leaf' },
-  oops: { box: 'bg-tint-oops text-on-tint-oops', badge: 'border-on-coral bg-coral-500 text-on-coral' },
-  hint: { box: 'bg-tint-hint text-on-tint-hint', badge: 'border-on-sun bg-sun-400 text-on-sun' },
-};
-
-function ChevronIcon() {
-  return (
-    <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-(--dur-pop) ease-bouncy motion-reduce:transition-none">
-      <path d="M6 15l6-6 6 6" />
-    </svg>
-  );
-}
-
-function BulbIcon() {
-  return (
-    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 18h6M10 21h4" />
-      <path d="M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z" />
-    </svg>
-  );
-}
+// A flag answer: a big sticker button holding a flag. No primitive has its square, padded shape.
+const FLAG_CHOICE = `grid cursor-pointer place-items-center rounded-md border-3 border-outline bg-surface p-2 shadow-drop-md transition-transform duration-(--dur-tap) hover:-translate-y-0.5 active:translate-y-[5px] active:shadow-none motion-reduce:transition-none ${FOCUS_RING} disabled:cursor-default disabled:shadow-none disabled:hover:translate-y-0`;
 
 // The progress chip's word for each step of a session.
 const STEP_LABELS: Partial<Record<Phase, string>> = { check: 'Check', meet: 'Meet', build: 'Build', match: 'Match', practice: 'Practice' };
 
-const TONE_ICONS ={ correct: <CheckIcon />, oops: <XIcon />, hint: <BulbIcon /> };
-
 function LevelChip({ level }: { level: number }) {
-  const { label, tint } = LEVELS[level] ?? LEVELS[0];
+  const { label, tone } = LEVELS[level] ?? LEVELS[0];
   return (
-    <span className={`inline-flex items-center gap-1 rounded-pill border-2 border-outline px-3 py-1 text-caption ${tint}`}>
+    <Chip size="sm" tone={tone}>
       {level === 3 && <StarIcon size={16} />}
       {label}
-    </span>
+    </Chip>
   );
 }
 
@@ -161,15 +137,15 @@ function CountryCard({ target, order, board, open, onOpenChange, saidHi, onNext 
     ].filter(r => r.value)
     : [];
   const next = (
-    <button type="button" className={NEXT_BUTTON} disabled={saidHi} onClick={onNext}>
+    <Button variant="continue" size="md" fill disabled={saidHi} onClick={onNext}>
       Next <ArrowRightIcon />
-    </button>
+    </Button>
   );
 
   return (
-    <Collapsible.Root open={wide || open} onOpenChange={onOpenChange} className={`${CARD} flex-col items-stretch gap-3`}>
+    <Collapsible.Root open={wide || open} onOpenChange={onOpenChange} render={<Card padding="sm" className="flex flex-col items-stretch gap-4" />}>
       <div className="flex items-center gap-4">
-        <img src={flagUrl(target.code)} alt={`Flag of ${target.name}`} className={`${FLAG_IMG} md:h-20 md:w-30`} />
+        <Flag code={target.code} alt={`Flag of ${target.name}`} className="md:h-20 md:w-30" />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="font-display text-title-2">This is {target.name}</span>
           <span className="text-body text-fg-muted">Tap it on the {board} to say hi.</span>
@@ -191,7 +167,7 @@ function CountryCard({ target, order, board, open, onOpenChange, saidHi, onNext 
       {!wide && (
         <div className="grid auto-cols-fr grid-flow-col gap-3">
           {rows.length > 0 && (
-            <Collapsible.Trigger className={`${SKIP_BUTTON} [&[data-panel-open]_svg]:rotate-180`}>
+            <Collapsible.Trigger render={<Button size="md" fill className="[&[data-panel-open]_svg]:rotate-180" />}>
               Fun facts <ChevronIcon />
             </Collapsible.Trigger>
           )}
@@ -521,16 +497,14 @@ export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView;
       {inSession && (
         // Above the build and match overlays, so Stop and the sound switch stay in reach.
         <div className="absolute top-4 right-4 z-3 flex items-center gap-3 max-md:top-3 max-md:right-3 max-md:left-3">
-          <button type="button" aria-label="Stop learning" onClick={stop} className={`${ICON_BUTTON} md:order-last`}>
-            <XIcon />
-          </button>
+          <IconButton aria-label="Stop learning" onClick={stop} className="md:order-last">
+            <XIcon size={22} strokeWidth="3" />
+          </IconButton>
           <SoundToggle />
-          <div className={`${CHIP} border-outline bg-surface text-label tabular-nums md:order-first max-md:h-tap-icon max-md:min-w-0 max-md:flex-1 max-md:box-border max-md:shadow-drop-sm`}>
+          <Chip phone="sticker" render={<div />} className="md:order-first max-md:min-w-0 max-md:flex-1">
             <span className="shrink-0">{stepLabel} {step} / {steps}</span>
-            <span className="block h-3 w-20 overflow-hidden rounded-pill border-2 border-outline bg-surface-sunk max-md:w-auto max-md:flex-1">
-              <span className="block h-full bg-leaf-500 transition-[width] duration-(--dur-pop) motion-reduce:transition-none" style={{ width: `${(step / steps) * 100}%` }} />
-            </span>
-          </div>
+            <ProgressBar value={step / steps} label="Session progress" className="max-md:w-auto max-md:flex-1" />
+          </Chip>
         </div>
       )}
 
@@ -540,29 +514,19 @@ export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView;
 
       {inSession && (
         <div className="absolute bottom-6 left-1/2 flex w-[560px] max-w-[calc(100%-32px)] -translate-x-1/2 flex-col gap-3 max-md:right-3 max-md:bottom-[max(16px,env(safe-area-inset-bottom))] max-md:left-3 max-md:w-auto max-md:max-w-none max-md:translate-x-0">
-          {feedback && (
-            <output className={`flex items-center gap-3 rounded-md border-3 border-outline px-4 py-3 shadow-drop-sm ${TONES[feedback.tone].box}`}>
-              <span className={`grid size-10 shrink-0 place-items-center rounded-pill border-3 ${TONES[feedback.tone].badge}`}>
-                {TONE_ICONS[feedback.tone]}
-              </span>
-              <span className="flex flex-col">
-                <span className="font-display text-title-3 font-extrabold">{feedback.title}</span>
-                <span className="text-caption">{feedback.detail}</span>
-              </span>
-            </output>
-          )}
+          {feedback && <FeedbackToast raised tone={feedback.tone} title={feedback.title} detail={feedback.detail} />}
 
           {checking && (
-            <div className={`${CARD} max-md:flex-wrap`}>
-              <img src={flagUrl(checking.code)} alt="Flag to find" className={FLAG_IMG} />
+            <Card padding="sm" className="flex items-center gap-4 max-md:flex-wrap">
+              <Flag code={checking.code} alt="Flag to find" />
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="font-display text-title-2">Do you know this one?</span>
                 <span className="text-body text-fg-muted">Tap its country on the {board}.</span>
               </span>
-              <button type="button" className={SKIP_BUTTON} disabled={!!feedback} onClick={() => answerCheck(false, { tone: 'hint', title: 'No problem!', detail: "Let's meet this one." })}>
+              <Button size="md" fill disabled={!!feedback} onClick={() => answerCheck(false, { tone: 'hint', title: 'No problem!', detail: "Let's meet this one." })}>
                 Not yet
-              </button>
-            </div>
+              </Button>
+            </Card>
           )}
 
           {meeting && (
@@ -578,17 +542,17 @@ export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView;
           )}
 
           {question && question.kind !== 'pick' && (
-            <div className={CARD}>
-              <img src={flagUrl(question.target.code)} alt="Flag to find" className={FLAG_IMG} />
+            <Card padding="sm" className="flex items-center gap-4">
+              <Flag code={question.target.code} alt="Flag to find" />
               <span className="flex flex-col gap-0.5">
                 <span className="font-display text-title-2">{question.kind === 'name' ? `Find ${question.target.name}` : 'Find this country'}</span>
                 <span className="text-body text-fg-muted">{question.kind === 'name' ? `Tap it on the ${board}.` : 'No name this time!'}</span>
               </span>
-            </div>
+            </Card>
           )}
 
           {question?.kind === 'pick' && (
-            <div className={`${CARD} flex-col items-stretch`}>
+            <Card padding="sm" className="flex flex-col items-stretch gap-4">
               <span className="flex flex-col gap-0.5">
                 <span className="font-display text-title-2">Which flag is this country's?</span>
                 <span className="text-body text-fg-muted">Look at the yellow country.</span>
@@ -603,39 +567,39 @@ export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView;
                     onClick={() => answer(c.code === question.target.code, c.name)}
                     className={FLAG_CHOICE}
                   >
-                    <img src={flagUrl(c.code)} alt="" className="block aspect-[3/2] w-full rounded-sm border-2 border-outline object-cover" />
+                    <Flag code={c.code} size="fill" alt="" />
                   </button>
                 ))}
               </div>
-            </div>
+            </Card>
           )}
         </div>
       )}
 
       {/* Build and match sit over the map; the top padding keeps them clear of the progress chip. */}
       {phase === 'build' && fresh[meetIndex] && (
-        <div className="absolute inset-0 z-2 grid place-items-center overflow-y-auto bg-scrim p-4 pt-20 max-md:grid-cols-1">
+        <Overlay scroll>
           <div className="w-[480px] max-w-full">
             <FlagJigsaw key={fresh[meetIndex].code} code={fresh[meetIndex].code} name={fresh[meetIndex].name} onDone={builtFlag} />
           </div>
-        </div>
+        </Overlay>
       )}
 
       {phase === 'match' && (
-        <div className="absolute inset-0 z-2 grid place-items-center overflow-y-auto bg-scrim p-4 pt-20 max-md:grid-cols-1">
-          <section className="box-border flex w-[680px] max-w-full flex-col items-center gap-4 rounded-lg border-3 border-outline bg-surface p-5 text-fg shadow-drop-lg">
+        <Overlay scroll>
+          <Card padding="md" render={<section />} className="box-border flex w-[680px] max-w-full flex-col items-center gap-4">
             <div className="flex flex-col gap-0.5 text-center">
               <h2 className="m-0 font-display text-title-2">Find the pairs</h2>
               <p className="m-0 text-body text-fg-muted">Match each flag with its country.</p>
             </div>
             <MemoryMatch key={round} countries={session} onMatch={matched} onDone={() => startPractice(session)} />
-          </section>
-        </div>
+          </Card>
+        </Overlay>
       )}
 
       {phase === 'start' && showHunt && (
-        <div className="absolute inset-0 z-2 grid place-items-center bg-scrim p-4 max-md:grid-cols-1">
-          <section className="box-border flex w-[560px] max-w-full flex-col gap-[18px] rounded-lg border-3 border-outline bg-surface p-7 text-fg shadow-drop-lg max-md:max-h-full max-md:gap-4 max-md:overflow-y-auto max-md:p-5">
+        <Overlay>
+          <Card render={<section />} className="box-border flex w-[560px] max-w-full flex-col gap-[18px] max-md:max-h-full max-md:gap-4 max-md:overflow-y-auto">
             <div className="flex flex-col gap-1.5 text-center">
               <h2 className="m-0 font-display text-title-1">Learn {huntSize === 1 ? 'this flag' : 'these flags'}</h2>
               <p className="m-0 text-body-lg text-fg-muted">
@@ -652,25 +616,25 @@ export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView;
             <ul className="m-0 flex list-none flex-col gap-2 p-0 text-left">
               {hunt.map(t => (
                 <li key={t.code} className="flex items-center gap-3 rounded-md border-3 border-outline bg-surface-sunk px-3 py-2">
-                  <img src={flagUrl(t.code)} alt="" className="block h-10 w-15 shrink-0 rounded-sm border-2 border-outline object-cover" />
+                  <Flag code={t.code} size="sm" alt="" />
                   <span className="min-w-0 flex-1 text-body font-bold">{t.name}</span>
                   <LevelChip level={levelOf(progress, t.code)} />
                 </li>
               ))}
             </ul>
             <div className="flex flex-wrap justify-center gap-3 max-md:flex-col">
-              <button type="button" disabled={!world} className={MAIN_BUTTON} onClick={startHunt}>
+              <Button variant="main" fill disabled={!world} onClick={startHunt}>
                 Start learning <ArrowRightIcon />
-              </button>
-              <button type="button" className={`${OTHER_BUTTON} cursor-pointer`} onClick={() => setHuntCodes([])}>Not now</button>
+              </Button>
+              <Button fill onClick={() => setHuntCodes([])}>Not now</Button>
             </div>
-          </section>
-        </div>
+          </Card>
+        </Overlay>
       )}
 
       {phase === 'start' && !showHunt && (
-        <div className="absolute inset-0 z-2 grid place-items-center bg-scrim p-4 max-md:grid-cols-1">
-          <section className="box-border flex w-[640px] max-w-full flex-col gap-[18px] rounded-lg border-3 border-outline bg-surface p-7 text-fg shadow-drop-lg max-md:max-h-full max-md:gap-4 max-md:overflow-y-auto max-md:p-5">
+        <Overlay>
+          <Card render={<section />} className="box-border flex w-[640px] max-w-full flex-col gap-[18px] max-md:max-h-full max-md:gap-4 max-md:overflow-y-auto">
             <div className="flex flex-col gap-1.5 text-center">
               <h2 className="m-0 font-display text-title-1">Learn flags</h2>
               <p className="m-0 text-body-lg text-fg-muted">
@@ -704,19 +668,19 @@ export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView;
             )}
             <div className="flex flex-wrap justify-center gap-3 max-md:flex-col">
               {hasNext && (
-                <button type="button" disabled={!world} className={MAIN_BUTTON} onClick={start}>
+                <Button variant="main" fill disabled={!world} onClick={start}>
                   {counts[1] + counts[2] + counts[3] ? 'Keep learning' : 'Start learning'} <ArrowRightIcon />
-                </button>
+                </Button>
               )}
-              <Link to="/country/games" className={OTHER_BUTTON}>Play Flag Hunt</Link>
+              <Button fill render={<Link to="/country/games" />}>Play Flag Hunt</Button>
             </div>
-          </section>
-        </div>
+          </Card>
+        </Overlay>
       )}
 
       {phase === 'done' && (
-        <div className="absolute inset-0 z-2 grid place-items-center bg-scrim p-4 max-md:grid-cols-1">
-          <section className="box-border flex w-[560px] max-w-full flex-col gap-4 rounded-lg border-3 border-outline bg-surface p-7 text-center text-fg shadow-drop-lg max-h-full overflow-y-auto max-md:p-5">
+        <Overlay>
+          <Card render={<section />} className="box-border flex w-[560px] max-w-full flex-col gap-4 text-center max-h-full overflow-y-auto">
             <div className="flex items-end justify-center gap-1.5">
               <StarIcon size={44} /><StarIcon size={60} /><StarIcon size={44} />
             </div>
@@ -729,7 +693,7 @@ export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView;
               {/* Countries known in the check that also repeated are listed once. */}
               {[...knew.filter(k => !session.some(s => s.code === k.code)), ...session].map(t => (
                 <li key={t.code} className="flex items-center gap-3 rounded-md border-3 border-outline bg-surface-sunk px-3 py-2">
-                  <img src={flagUrl(t.code)} alt="" className="block h-10 w-15 shrink-0 rounded-sm border-2 border-outline object-cover" />
+                  <Flag code={t.code} size="sm" alt="" />
                   <span className="min-w-0 flex-1 text-body font-bold">{t.name}</span>
                   <LevelChip level={levelOf(progress, t.code)} />
                 </li>
@@ -737,14 +701,14 @@ export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView;
             </ul>
             <div className="mt-2 flex flex-wrap justify-center gap-3 max-md:flex-col">
               {hasNext && (
-                <button type="button" className={MAIN_BUTTON} onClick={start}>
+                <Button variant="main" fill onClick={start}>
                   Learn {batch.fresh.length || BATCH} more <ArrowRightIcon />
-                </button>
+                </Button>
               )}
-              <Link to="/country/games" className={OTHER_BUTTON}>Play Flag Hunt</Link>
+              <Button fill render={<Link to="/country/games" />}>Play Flag Hunt</Button>
             </div>
-          </section>
-        </div>
+          </Card>
+        </Overlay>
       )}
     </div>
   );
