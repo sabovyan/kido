@@ -1,8 +1,11 @@
 import { type PointerEvent, useEffect, useRef, useState } from 'react';
 import { flagPngUrl, flagUrl } from '../countries';
+import { Card } from '../ui/Card';
+import { Feedback } from '../ui/Feedback';
+import { FOCUS_RING } from '../ui/focus';
 import { isComplete, JIGSAW_COLS, JIGSAW_ROWS, placePiece, shuffledPieces, slotAt, slotLabel, tileBackground } from './jigsaw';
 
-type Feedback = { tone: 'idle' | 'correct' | 'hint'; text: string };
+type Message = { tone: 'idle' | 'correct' | 'hint'; text: string };
 type Drag = { piece: number; pointerId: number; x0: number; y0: number; moved: boolean };
 
 const PIECES = JIGSAW_COLS * JIGSAW_ROWS;
@@ -16,31 +19,7 @@ const POP_MS = 240;
 // Time to enjoy the finished flag before moving on.
 const DONE_DELAY_MS = 900;
 
-const IDLE: Feedback = { tone: 'idle', text: 'Drag a piece to its spot. Or tap a piece, then a spot.' };
-
-const TONES = {
-  idle: { box: 'bg-surface-sunk text-fg', badge: '' },
-  correct: { box: 'bg-tint-correct text-on-tint-correct', badge: 'border-on-leaf bg-leaf-500 text-on-leaf' },
-  hint: { box: 'bg-tint-hint text-on-tint-hint', badge: 'border-on-sun bg-sun-400 text-on-sun' },
-};
-
-const FOCUS = 'focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500';
-
-function CheckIcon() {
-  return (
-    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 12.5l4.5 4.5L19 7.5" />
-    </svg>
-  );
-}
-
-function BulbIcon() {
-  return (
-    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3z" />
-    </svg>
-  );
-}
+const IDLE: Message = { tone: 'idle', text: 'Drag a piece to its spot. Or tap a piece, then a spot.' };
 
 const newGame = (code: string) => ({ code, order: shuffledPieces(PIECES), placed: Array<boolean>(PIECES).fill(false) });
 
@@ -63,7 +42,7 @@ export function FlagJigsaw({ code, name, onDone }: { code: string; name: string;
   const [game, setGame] = useState(() => newGame(code));
   const [selected, setSelected] = useState<number | null>(null);
   const [offset, setOffset] = useState<{ piece: number; x: number; y: number } | null>(null);
-  const [feedback, setFeedback] = useState<Feedback>(IDLE);
+  const [feedback, setFeedback] = useState<Message>(IDLE);
   const [pop, setPop] = useState(false);
   const ratio = useFlagRatio(code);
   const drag = useRef<Drag | null>(null);
@@ -175,10 +154,9 @@ export function FlagJigsaw({ code, name, onDone }: { code: string; name: string;
   const tileRatio = (ratio * JIGSAW_ROWS) / JIGSAW_COLS;
   const image = `url(${flagUrl(code)})`;
   const grid = { gridTemplateColumns: `repeat(${JIGSAW_COLS}, minmax(0, 1fr))` };
-  const tone = TONES[feedback.tone];
 
   return (
-    <section className="box-border flex w-full flex-col items-center gap-4 rounded-lg border-3 border-outline bg-surface p-5 font-body text-fg shadow-drop-lg">
+    <Card padding="md" render={<section />} className="box-border flex w-full flex-col items-center gap-4 font-body">
       <h2 className="m-0 text-center font-display text-title-2">Build the flag of {name}</h2>
 
       <fieldset
@@ -198,7 +176,7 @@ export function FlagJigsaw({ code, name, onDone }: { code: string; name: string;
               aria-label={placed ? `${slotLabel(slot)}, done` : slotLabel(slot)}
               aria-disabled={placed || complete || undefined}
               onClick={() => pickSlot(slot)}
-              className={`relative m-0 box-border min-h-0 min-w-0 cursor-pointer border-2 border-dashed bg-transparent p-0 ${FOCUS} focus-visible:-outline-offset-4 ${placed ? 'cursor-default border-transparent' : selected === null ? 'border-fg-muted' : 'border-ocean-500 bg-surface hover:bg-tint-hint'}`}
+              className={`relative m-0 box-border min-h-0 min-w-0 cursor-pointer border-2 border-dashed bg-transparent p-0 ${FOCUS_RING} focus-visible:-outline-offset-4 ${placed ? 'cursor-default border-transparent' : selected === null ? 'border-fg-muted' : 'border-ocean-500 bg-surface hover:bg-tint-hint'}`}
             >
               {placed && (
                 <span
@@ -212,14 +190,7 @@ export function FlagJigsaw({ code, name, onDone }: { code: string; name: string;
         })}
       </fieldset>
 
-      <output className={`box-border flex min-h-tap-main w-full items-center gap-3 rounded-md border-3 border-outline px-4 py-2 ${tone.box}`}>
-        {feedback.tone !== 'idle' && (
-          <span className={`grid size-10 shrink-0 place-items-center rounded-pill border-3 ${tone.badge}`}>
-            {feedback.tone === 'correct' ? <CheckIcon /> : <BulbIcon />}
-          </span>
-        )}
-        <span className="text-body font-bold">{feedback.text}</span>
-      </output>
+      <Feedback tone={feedback.tone} detail={feedback.text} className="w-full" />
 
       {/* Empty spots keep the tray's size while playing; it goes away once the flag is built. */}
       <fieldset className={`m-0 min-w-0 max-w-full gap-3 border-0 p-0 ${complete ? 'hidden' : 'grid'}`} style={{ ...grid, width: frameW + 12 * (JIGSAW_COLS - 1) }}>
@@ -238,7 +209,7 @@ export function FlagJigsaw({ code, name, onDone }: { code: string; name: string;
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerCancel}
-              className={`relative m-0 box-border min-h-tap-min min-w-tap-min cursor-grab touch-none rounded-sm border-3 border-outline bg-surface bg-no-repeat p-0 shadow-drop-sm select-none ${FOCUS} aria-pressed:-translate-y-1.5 aria-pressed:shadow-drop-lg aria-pressed:outline-3 aria-pressed:outline-offset-2 aria-pressed:outline-sun-400 ${dragging ? 'z-1 scale-105 cursor-grabbing shadow-drop-lg' : 'transition-[translate,scale,transform] duration-(--dur-pop) ease-bouncy hover:-translate-y-0.5 motion-reduce:transition-none'}`}
+              className={`relative m-0 box-border min-h-tap-min min-w-tap-min cursor-grab touch-none rounded-sm border-3 border-outline bg-surface bg-no-repeat p-0 shadow-drop-sm select-none ${FOCUS_RING} aria-pressed:-translate-y-1.5 aria-pressed:shadow-drop-lg aria-pressed:outline-3 aria-pressed:outline-offset-2 aria-pressed:outline-sun-400 ${dragging ? 'z-1 scale-105 cursor-grabbing shadow-drop-lg' : 'transition-[translate,scale,transform] duration-(--dur-pop) ease-bouncy hover:-translate-y-0.5 motion-reduce:transition-none'}`}
               style={{
                 aspectRatio: String(tileRatio),
                 backgroundImage: image,
@@ -249,6 +220,6 @@ export function FlagJigsaw({ code, name, onDone }: { code: string; name: string;
           );
         })}
       </fieldset>
-    </section>
+    </Card>
   );
 }

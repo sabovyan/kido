@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { flagUrl } from '../countries';
-import { CheckIcon } from './icons';
+import { Flag } from '../ui/Flag';
+import { FOCUS_RING } from '../ui/focus';
+import { CheckIcon, GlobeIcon } from '../ui/icons';
 import { buildDeck, flip, isDone, MEMORY_START, type MemoryCard, type MemoryCountry, outlinePath } from './memory';
 
 export type { MemoryCountry } from './memory';
@@ -17,7 +18,7 @@ const MISS_PAUSE = 1000;
 const DONE_PAUSE = 900;
 const SHAPE_W = 100, SHAPE_H = 70;
 
-const CARD = 'group relative block aspect-square w-full cursor-pointer border-0 bg-transparent rounded-lg p-0 font-body text-fg perspective-[800px] transition-transform duration-(--dur-tap) motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 disabled:cursor-default max-md:aspect-[4/5]';
+const CARD = `group relative block aspect-square w-full cursor-pointer border-0 bg-transparent rounded-lg p-0 font-body text-fg perspective-[800px] transition-transform duration-(--dur-tap) motion-reduce:transition-none ${FOCUS_RING} disabled:cursor-default max-md:aspect-[4/5]`;
 const FACE = 'absolute inset-0 box-border flex flex-col items-center justify-center gap-1 rounded-lg border-3 border-outline shadow-drop-md backface-hidden transition-opacity duration-(--dur-pop) motion-reduce:transform-none motion-reduce:backface-visible';
 
 export function MemoryMatch({ countries, onMatch, onDone }: Props) {
@@ -76,11 +77,11 @@ export function MemoryMatch({ countries, onMatch, onDone }: Props) {
               >
                 <span className={`block size-full transform-3d transition-transform duration-(--dur-pop) ease-bouncy motion-reduce:transform-none motion-reduce:transition-none ${up ? 'rotate-y-180' : ''}`}>
                   <span className={`${FACE} bg-ocean-500 text-on-ocean group-active:shadow-none ${up ? 'motion-reduce:opacity-0' : ''}`}>
-                    <GlobeIcon />
+                    <GlobeIcon size={40} />
                   </span>
                   <span className={`${FACE} rotate-y-180 p-2 ${matched ? 'bg-tint-correct text-on-tint-correct' : 'bg-surface'} ${up ? '' : 'motion-reduce:opacity-0'}`}>
                     {card.face === 'flag' ? (
-                      <img src={flagUrl(card.code)} alt="" className="block aspect-[3/2] w-full rounded-sm border-2 border-outline object-cover" />
+                      <Flag code={card.code} size="fill" alt="" />
                     ) : (
                       <>
                         <svg aria-hidden="true" viewBox={`0 0 ${SHAPE_W} ${SHAPE_H}`} className="block min-h-0 w-full flex-1">
@@ -91,7 +92,7 @@ export function MemoryMatch({ countries, onMatch, onDone }: Props) {
                     )}
                     {matched && (
                       <span className="absolute -top-2.5 -right-2.5 grid size-8 place-items-center rounded-full border-3 border-on-leaf bg-leaf-500 text-on-leaf">
-                        <CheckIcon size={20} />
+                        <CheckIcon size={20} strokeWidth="3" />
                       </span>
                     )}
                   </span>
@@ -107,12 +108,3 @@ export function MemoryMatch({ countries, onMatch, onDone }: Props) {
 }
 
 const cardLabel = (card: MemoryCard) => (card.face === 'flag' ? `Flag of ${card.name}` : `${card.name}, country shape`);
-
-function GlobeIcon() {
-  return (
-    <svg aria-hidden="true" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
-    </svg>
-  );
-}
