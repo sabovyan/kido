@@ -2,19 +2,27 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from '@tanstack/react-router';
 import * as d3 from 'd3';
-import { flagUrl, loadUserCountry, loadWorld, type Country, type World } from '../countries';
+import { loadUserCountry, loadWorld, type Country, type World } from '../countries';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { Chip } from '../ui/Chip';
+import { Feedback } from '../ui/Feedback';
+import { Flag } from '../ui/Flag';
+import { FOCUS_RING } from '../ui/focus';
+import { IconButton } from '../ui/IconButton';
+import { ArrowRightIcon, FlagIcon, FlameIcon, HeartIcon, StarIcon, XIcon } from '../ui/icons';
+import { Overlay } from '../ui/Overlay';
+import { ProgressBar } from '../ui/ProgressBar';
 import type { Focus } from './board';
 import { FlatBoard } from './FlatBoard';
 import { GlobeBoard } from './GlobeBoard';
-import { ArrowRightIcon, CheckIcon, StarIcon, XIcon } from './icons';
 import { huntMiss, loadProgress, saveProgress, shuffle } from './learnSession';
 import type { Paint } from './painter';
 import { buildTargets, chapterOf, sovereignOf, type Target, withPaint } from './targets';
-import { CHIP, ICON_BUTTON } from './ui';
 
 type Phase = 'start' | 'playing' | 'feedback' | 'over';
 type Mode = 'easy' | 'medium' | 'hard';
-type Feedback = { ok: boolean; title: string; detail: string };
+type Answer = { ok: boolean; title: string; detail: string };
 export type GameView = 'map' | 'globe';
 
 const LIVES = 3;
@@ -32,43 +40,11 @@ function formatPercent(share: number) {
   return `${pct.toFixed(pct > 0 && pct < 1 ? 2 : 1)}%`;
 }
 
-const BUTTON = 'inline-flex h-tap-main items-center gap-2.5 rounded-md border-3 border-outline px-7 font-display text-title-2 shadow-drop-md transition-transform duration-(--dur-tap) hover:-translate-y-0.5 active:translate-y-[5px] active:shadow-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 max-md:box-border max-md:w-full max-md:justify-center';
-const MAIN_BUTTON = `${BUTTON} bg-sun-400 text-on-sun active:bg-sun-600`;
-const OTHER_BUTTON = `${BUTTON} bg-surface text-fg`;
-const SMALL_BUTTON = 'inline-flex h-tap-min shrink-0 items-center gap-2 self-center rounded-md border-3 border-outline bg-surface px-5 font-display text-title-3 text-fg no-underline shadow-drop-sm transition-transform duration-(--dur-tap) active:translate-y-1 active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 max-md:box-border max-md:w-full max-md:justify-center';
-
 // Stable keys for the heart and star rows.
 const HEARTS = Array.from({ length: LIVES }, (_, i) => `heart-${i}`);
 const STARS = ['star-1', 'star-2', 'star-3'];
 
-// On phones the chips sit borderless inside one score bar sticker.
-const IN_BAR = 'max-md:h-auto max-md:border-0 max-md:bg-transparent max-md:px-0';
-const MODE_CARD = 'max-md:min-h-18 max-md:flex-row max-md:items-center max-md:gap-3 max-md:px-4 max-md:py-3 max-md:disabled:border-outline max-md:disabled:bg-surface-sunk max-md:disabled:text-fg-muted flex cursor-pointer flex-col items-start gap-2 rounded-lg border-3 border-outline p-[18px] text-left font-body shadow-drop-lg transition-transform duration-(--dur-tap) hover:-translate-y-0.5 active:translate-y-[5px] active:shadow-none motion-reduce:transition-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ocean-500 disabled:cursor-default disabled:border-dashed disabled:bg-surface-sunk disabled:text-fg-muted disabled:shadow-none disabled:hover:translate-y-0';
-
-function HeartIcon({ lost }: { lost: boolean }) {
-  return (
-    <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinejoin="round" className={lost ? 'fill-surface-sunk stroke-fg-muted' : 'fill-coral-500 stroke-on-coral'}>
-      <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />
-    </svg>
-  );
-}
-
-function FlameIcon() {
-  return (
-    <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinejoin="round" className="fill-sun-400 stroke-on-sun">
-      <path d="M12 21c-4 0-7-2.7-7-6.5 0-3.5 3-5.5 4-9.5 2 1.5 3 3.5 3 5.5 1-1 1.5-2 1.5-3.5 2.5 2 5.5 4.5 5.5 7.5 0 3.8-3 6.5-7 6.5z" />
-    </svg>
-  );
-}
-
-function FlagIcon() {
-  return (
-    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 21V4" />
-      <path d="M5 4h11l-2 4 2 4H5" />
-    </svg>
-  );
-}
+const MODE_CARD = `max-md:min-h-18 max-md:flex-row max-md:items-center max-md:gap-3 max-md:px-4 max-md:py-3 max-md:disabled:border-outline max-md:disabled:bg-surface-sunk max-md:disabled:text-fg-muted flex cursor-pointer flex-col items-start gap-2 rounded-lg border-3 border-outline p-[18px] text-left font-body shadow-drop-lg transition-transform duration-(--dur-tap) hover:-translate-y-0.5 active:translate-y-[5px] active:shadow-none motion-reduce:transition-none ${FOCUS_RING} disabled:cursor-default disabled:border-dashed disabled:bg-surface-sunk disabled:text-fg-muted disabled:shadow-none disabled:hover:translate-y-0`;
 
 function listNames(targets: Target[], max = 5) {
   const names = targets.slice(0, max).map(t => t.name).join(', ');
@@ -87,7 +63,7 @@ export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactN
   const [streak, setStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
   const [collected, setCollected] = useState<Set<string>>(new Set());
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [feedback, setFeedback] = useState<Answer | null>(null);
   const [focus, setFocus] = useState<Focus | null>(null);
   const [paints, setPaints] = useState<Map<Country, Paint>>(new Map());
   const [missed, setMissed] = useState<Target[]>([]);
@@ -210,27 +186,27 @@ export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactN
 
   const inGame = phase === 'playing' || phase === 'feedback';
 
+  // On phones the chips sit borderless inside one score bar sticker.
   const chips = (
     <>
-      <div role="img" aria-label={`${lives} of ${LIVES} hearts left`} className={`${CHIP} gap-1 border-outline bg-surface ${IN_BAR}`}>
+      <Chip phone="bar" role="img" aria-label={`${lives} of ${LIVES} hearts left`} render={<div />}>
         {HEARTS.map((key, i) => <HeartIcon key={key} lost={i >= lives} />)}
-      </div>
-      <div className={`${CHIP} border-outline bg-surface ${IN_BAR}`}>
+      </Chip>
+      <Chip phone="bar" render={<div />}>
         <StarIcon />
         <span className="font-display text-title-3 font-extrabold tabular-nums">{score}</span>
         <span className="sr-only">points</span>
-      </div>
-      {/* Brand fills keep an ink edge in both themes. */}
-      <div className={`${CHIP} border-on-sun bg-grape-500 text-on-grape max-md:hidden`}>
+      </Chip>
+      <Chip tone="reward" className="max-md:hidden" render={<div />}>
         <FlameIcon />
         <span className="font-display text-title-3 font-extrabold tabular-nums">×{streak}</span>
         <span className="sr-only">streak</span>
-      </div>
-      <div className={`${CHIP} border-outline bg-surface text-label tabular-nums ${IN_BAR}`}>
-        <FlagIcon />
+      </Chip>
+      <Chip phone="bar" render={<div />}>
+        <FlagIcon size={22} />
         {collected.size} / {queue.length}
         <span className="sr-only">flags</span>
-      </div>
+      </Chip>
     </>
   );
 
@@ -246,20 +222,18 @@ export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactN
       {phase !== 'start' && (
         <div className="absolute top-4 right-4 z-1 flex flex-wrap justify-end gap-3 max-md:top-3 max-md:right-3 max-md:left-3 max-md:flex-nowrap max-md:justify-start">
           {inGame && (
-            <button type="button" aria-label="Stop game" onClick={stop} className={`${ICON_BUTTON} md:hidden`}>
-              <XIcon />
-            </button>
+            <IconButton aria-label="Stop game" onClick={stop} className="md:hidden">
+              <XIcon size={22} strokeWidth="3" />
+            </IconButton>
           )}
           {/* Phones: one score bar over the globe. */}
           <div className="contents md:hidden max-md:box-border max-md:flex max-md:h-tap-icon max-md:min-w-0 max-md:flex-1 max-md:items-center max-md:justify-between max-md:rounded-pill max-md:border-3 max-md:border-outline max-md:bg-surface max-md:px-4 max-md:shadow-drop-sm">
             {chips}
           </div>
-          <div className={`${CHIP} border-outline bg-surface text-label tabular-nums max-md:hidden`}>
+          <Chip className="max-md:hidden" render={<div />}>
             Land {formatPercent(landShare)}
-            <span className="block h-3 w-20 overflow-hidden rounded-pill border-2 border-outline bg-surface-sunk">
-              <span className="block h-full bg-leaf-500 transition-[width] duration-(--dur-pop) motion-reduce:transition-none" style={{ width: `${landShare * 100}%` }} />
-            </span>
-          </div>
+            <ProgressBar value={landShare} label="Land painted" />
+          </Chip>
         </div>
       )}
 
@@ -271,29 +245,21 @@ export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactN
         <div className="absolute bottom-6 left-1/2 flex w-[560px] max-w-[calc(100%-32px)] -translate-x-1/2 flex-col gap-3 max-md:right-3 max-md:bottom-[max(16px,env(safe-area-inset-bottom))] max-md:left-3 max-md:w-auto max-md:max-w-none max-md:translate-x-0">
           {/* On phones the feedback takes the question card's place instead of stacking on it. */}
           {feedback && (
-            <output className={`flex items-center gap-3 rounded-md border-3 border-outline px-4 py-3 max-md:min-h-16 max-md:gap-4 max-md:rounded-lg max-md:px-[18px] max-md:py-3.5 max-md:shadow-drop-lg ${feedback.ok ? 'bg-tint-correct text-on-tint-correct' : 'bg-tint-oops text-on-tint-oops'}`}>
-              <span className={`grid size-10 shrink-0 place-items-center rounded-pill border-3 ${feedback.ok ? 'border-on-leaf bg-leaf-500 text-on-leaf' : 'border-on-coral bg-coral-500 text-on-coral'}`}>
-                {feedback.ok ? <CheckIcon /> : <XIcon />}
-              </span>
-              <span className="flex flex-col">
-                <span className="font-display text-title-3 font-extrabold">{feedback.title}</span>
-                <span className="text-caption">{feedback.detail}</span>
-              </span>
-            </output>
+            <Feedback tone={feedback.ok ? 'correct' : 'oops'} title={feedback.title} detail={feedback.detail} phoneCard />
           )}
           {/* On phones the card is just the flag, centred; the alt text carries the instruction. */}
-          <div className={`flex items-center gap-4 rounded-lg border-3 border-outline bg-surface px-[18px] py-3.5 shadow-drop-lg max-md:self-center max-md:p-2.5 ${feedback ? 'max-md:hidden' : ''}`}>
-            <img src={flagUrl(target.code)} alt="Find the country with this flag" className="block h-16 w-24 shrink-0 rounded-[10px] border-3 border-outline object-cover max-md:h-20 max-md:w-30 max-md:rounded-sm" />
+          <Card padding="sm" className={`flex items-center gap-4 max-md:self-center max-md:p-2.5 ${feedback ? 'max-md:hidden' : ''}`}>
+            <Flag code={target.code} alt="Find the country with this flag" className="max-md:h-20 max-md:w-30" />
             <span className="flex flex-col gap-0.5 max-md:hidden">
               <span className="font-display text-title-2">Find this country</span>
             </span>
-          </div>
+          </Card>
         </div>
       )}
 
       {phase === 'start' && (
-        <div className="absolute inset-0 z-2 grid place-items-center bg-scrim p-4 max-md:grid-cols-1">
-          <section className="box-border flex w-[760px] max-w-full flex-col gap-[18px] rounded-lg border-3 border-outline bg-surface p-7 text-fg shadow-drop-lg max-md:max-h-full max-md:gap-4 max-md:overflow-y-auto max-md:p-5">
+        <Overlay>
+          <Card render={<section />} className="box-border flex w-[760px] max-w-full flex-col gap-[18px] max-md:max-h-full max-md:gap-4 max-md:overflow-y-auto">
             <div className="flex flex-col gap-1.5 text-center">
               <h2 className="m-0 font-display text-title-1">Flag Hunt</h2>
               <p className="m-0 text-body-lg text-fg-muted">
@@ -321,8 +287,8 @@ export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactN
                 </button>
               ))}
             </div>
-          </section>
-        </div>
+          </Card>
+        </Overlay>
       )}
 
       {phase === 'over' && (() => {
@@ -334,8 +300,8 @@ export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactN
         const modeLabel = MODES.find(m => m.mode === mode)?.label;
         const nextMode = outOfHearts ? undefined : MODES[MODES.findIndex(m => m.mode === mode) + 1];
         return (
-          <div className="absolute inset-0 z-2 grid place-items-center bg-scrim p-4 max-md:grid-cols-1">
-            <section className="flex max-w-[560px] flex-col gap-4 rounded-lg border-3 border-outline bg-surface p-7 text-center text-fg shadow-drop-lg max-md:box-border max-md:max-h-full max-md:overflow-y-auto max-md:p-5">
+          <Overlay>
+            <Card render={<section />} className="flex max-w-[560px] flex-col gap-4 text-center max-md:box-border max-md:max-h-full max-md:overflow-y-auto">
               {!outOfHearts && (
                 <div className="flex items-end justify-center gap-1.5">
                   <StarIcon size={44} /><StarIcon size={60} /><StarIcon size={44} />
@@ -351,38 +317,39 @@ export function Game({ view, viewSwitch }: { view: GameView; viewSwitch?: ReactN
                 <>
                   <p className="m-0 text-body text-fg-muted">Try these next time: {listNames(missed)}</p>
                   {/* Learn takes the first 6 (its memory game's limit). */}
-                  <Link
-                    to="/country/learn"
-                    search={{ ...(view === 'map' ? { view: 'map' } : {}), codes: missed.map(t => t.code).join(',') }}
-                    className={SMALL_BUTTON}
+                  <Button
+                    size="md"
+                    fill
+                    className="self-center"
+                    render={<Link to="/country/learn" search={{ ...(view === 'map' ? { view: 'map' } : {}), codes: missed.map(t => t.code).join(',') }} />}
                   >
                     Learn {missed.length === 1 ? 'this one' : 'these'} <ArrowRightIcon />
-                  </Link>
+                  </Button>
                 </>
               )}
-              <div className="flex flex-wrap justify-center gap-2 text-caption tabular-nums">
-                <span className="rounded-pill border-2 border-outline bg-tint-hint px-3 py-1.5 text-on-tint-hint">{score} points</span>
-                <span className="rounded-pill border-2 border-outline bg-tint-correct px-3 py-1.5 text-on-tint-correct">{collected.size} flags</span>
-                <span className="rounded-pill border-2 border-outline bg-tint-reward px-3 py-1.5 text-on-tint-reward">Best streak {bestStreak}</span>
-                <span className="rounded-pill border-2 border-outline bg-surface-sunk px-3 py-1.5">{formatPercent(landShare)} land</span>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Chip size="sm" tone="tint-hint">{score} points</Chip>
+                <Chip size="sm" tone="tint-correct">{collected.size} flags</Chip>
+                <Chip size="sm" tone="tint-reward">Best streak {bestStreak}</Chip>
+                <Chip size="sm" tone="sunk">{formatPercent(landShare)} land</Chip>
               </div>
               <div className="mt-2 flex flex-wrap justify-center gap-3 max-md:flex-col">
                 {nextMode ? (
                   <>
-                    <button type="button" className={MAIN_BUTTON} onClick={() => start(nextMode.mode)}>
+                    <Button variant="main" fill onClick={() => start(nextMode.mode)}>
                       Try {nextMode.label} <ArrowRightIcon />
-                    </button>
-                    <button type="button" className={OTHER_BUTTON} onClick={() => start(mode)}>Play {modeLabel} again</button>
+                    </Button>
+                    <Button fill onClick={() => start(mode)}>Play {modeLabel} again</Button>
                   </>
                 ) : (
-                  <button type="button" className={MAIN_BUTTON} onClick={() => start(mode)}>
+                  <Button variant="main" fill onClick={() => start(mode)}>
                     {outOfHearts ? 'Try again' : 'Play again'}
-                  </button>
+                  </Button>
                 )}
-                <button type="button" className={OTHER_BUTTON} onClick={() => setPhase('start')}>Change mode</button>
+                <Button fill onClick={() => setPhase('start')}>Change mode</Button>
               </div>
-            </section>
-          </div>
+            </Card>
+          </Overlay>
         );
       })()}
     </div>
