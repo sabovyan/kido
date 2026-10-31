@@ -428,7 +428,6 @@ export function Learn({ view, viewSwitch, codes = NO_CODES }: { view: LearnView;
             <CountryCard
               target={meeting}
               order={order}
-              board={board}
               open={factsOpen}
               onOpenChange={setFactsOpen}
               saidHi={feedback?.tone === 'correct'}

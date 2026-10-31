@@ -28,10 +28,9 @@ const useWide = () => useSyncExternalStore(onWideChange, () => window.matchMedia
 
 // The meet step: flag, name and a few easy facts. Rows the dataset doesn't have are left out.
 // `order`: every country, best-known first, for the neighbours' names.
-export function CountryCard({ target, order, board, open, onOpenChange, saidHi, onNext }: {
+export function CountryCard({ target, order, open, onOpenChange, saidHi, onNext }: {
   target: Named;
   order: Named[];
-  board: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   saidHi: boolean;
@@ -59,8 +58,7 @@ export function CountryCard({ target, order, board, open, onOpenChange, saidHi, 
       <div className="flex items-center gap-4">
         <Flag code={target.code} alt={`Flag of ${target.name}`} className="md:h-20 md:w-30" />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="font-display text-title-2">This is {target.name}</span>
-          <span className="text-body text-fg-muted">Tap it on the {board} to say hi.</span>
+          <span className="font-display text-title-2">{target.name}</span>
         </span>
         {wide && next}
       </div>
@@ -77,9 +75,9 @@ export function CountryCard({ target, order, board, open, onOpenChange, saidHi, 
         </Collapsible.Panel>
       )}
       {!wide && (
-        <div className="grid auto-cols-fr grid-flow-col gap-3">
+        <div className="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:px-3">
           {rows.length > 0 && (
-            <Collapsible.Trigger render={<Button size="md" fill className="[&[data-panel-open]_svg]:rotate-180" />}>
+            <Collapsible.Trigger render={<Button size="md" fill className="whitespace-nowrap [&[data-panel-open]_svg]:rotate-180" />}>
               Fun facts <ChevronIcon />
             </Collapsible.Trigger>
           )}

@@ -22,7 +22,6 @@ const meta = {
   args: {
     target: { code: 'np', name: 'Nepal' },
     order: ORDER,
-    board: 'globe',
     open: false,
     saidHi: false,
     onOpenChange: fn(),
