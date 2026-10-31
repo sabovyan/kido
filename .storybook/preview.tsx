@@ -17,6 +17,9 @@ const withThemeBeforeMount: Decorator = (Story, context) => {
 // A memory-history router whose root route is the story, so `<Link>` works.
 // Stories pick the current page with `parameters: { router: { path: '/country/learn' } }`.
 // A new router per render also remounts the story when the theme changes.
+// RouterProvider only loads the router it first mounted with, so key it to mount fresh for each new router;
+// otherwise a re-render (theme, viewport, controls) leaves it with an unloaded router and an empty canvas.
+let routerKey = 0;
 const withRouter: Decorator = (Story, { parameters }) => {
   const router = createRouter({
     history: createMemoryHistory({ initialEntries: [parameters.router?.path ?? '/'] }),
@@ -28,7 +31,7 @@ const withRouter: Decorator = (Story, { parameters }) => {
       ),
     }),
   });
-  return <RouterProvider router={router} />;
+  return <RouterProvider key={++routerKey} router={router} />;
 };
 
 const preview: Preview = {
