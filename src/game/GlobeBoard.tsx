@@ -19,6 +19,37 @@ type Flight = { from: THREE.Vector3; rot: THREE.Quaternion; d0: number; d1: numb
 
 // Matches the OrbitControls limit below.
 const MIN_DISTANCE = 1.2;
+// Screen px the answer's drop sits below it (shadow-drop-md), as on the flat board.
+const LIFT = 5;
+
+// THREE.Color drops alpha, so an rgba() token is split into colour and opacity.
+function rgba(value: string) {
+  const [r = '0', g = '0', b = '0', a = '1'] = value.match(/[\d.]+/g) ?? [];
+  return { color: `rgb(${r}, ${g}, ${b})`, opacity: Number(a) };
+}
+
+// The answer's drop: the lifted answer again in the drop colour, kept LIFT px below it on screen
+// however the globe is turned or zoomed.
+function AnswerDrop({ texture, color }: { texture: THREE.Texture; color: string }) {
+  const ref = useRef<THREE.Mesh>(null);
+  const camera = useThree(s => s.camera) as THREE.PerspectiveCamera;
+  const height = useThree(s => s.size.height);
+
+  useFrame(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    // World units per screen px at the globe's near surface.
+    const px = (2 * (camera.position.length() - 1) * Math.tan((camera.fov * Math.PI) / 360)) / height;
+    mesh.position.set(0, 1, 0).applyQuaternion(camera.quaternion).multiplyScalar(-LIFT * px);
+  });
+
+  return (
+    <mesh ref={ref} renderOrder={2}>
+      <sphereGeometry args={[1, 128, 64]} />
+      <meshBasicMaterial map={texture} color={color} transparent depthTest={false} depthWrite={false} />
+    </mesh>
+  );
+}
 
 // Turns the camera to look at `to` from `distance`: flies over --dur-fly, or jumps under reduced motion.
 function flight(camera: THREE.Camera, to: THREE.Vector3, distance: number): Flight {
@@ -77,12 +108,18 @@ function CameraRig({ focus, held }: { focus: Focus | null; held: boolean }) {
 export function GlobeBoard({ world, paints, focus, onPick }: BoardProps) {
   const [painter, setPainter] = useState<GamePainter | null>(null);
   const painted = useRef(new Map<Country, Paint>());
-  const [outline, setOutline] = useState('');
+  const [theme, setTheme] = useState({ outline: '', drop: '', scrim: '' });
+  // Whether an answer is lifted above the dimmed globe.
+  const [lifted, setLifted] = useState(false);
   const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
 
   // The theme lives on <html data-theme>, or follows the device when unset.
   useEffect(() => {
-    const read = () => setOutline(getComputedStyle(document.documentElement).getPropertyValue('--outline').trim());
+    const read = () => {
+      const css = getComputedStyle(document.documentElement);
+      const token = (name: string) => css.getPropertyValue(name).trim();
+      setTheme({ outline: token('--outline'), drop: token('--drop'), scrim: token('--scrim') });
+    };
     read();
     const observer = new MutationObserver(read);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
@@ -115,6 +152,9 @@ export function GlobeBoard({ world, paints, focus, onPick }: BoardProps) {
       }
     }
     painted.current = new Map(paints);
+    const answers = [...paints].flatMap(([f, paint]) => (paint === 'answer' ? [f] : []));
+    if (answers.length) painter.liftAnswer(answers);
+    setLifted(answers.length > 0);
   }, [painter, paints]);
 
   const held = !!focus && focus.features.some(f => (paints.get(f) ?? 'blank') !== 'blank');
@@ -151,8 +191,22 @@ export function GlobeBoard({ world, paints, focus, onPick }: BoardProps) {
           {/* Sticker edge: a slightly bigger back-face sphere shows as an outline ring. */}
           <mesh scale={1.025}>
             <sphereGeometry args={[1, 64, 32]} />
-            <meshBasicMaterial color={outline} side={THREE.BackSide} />
+            <meshBasicMaterial color={theme.outline} side={THREE.BackSide} />
           </mesh>
+          {lifted && (
+            <>
+              {/* A scrim over the whole globe, then the answer and its drop drawn on top of it. */}
+              <mesh scale={1.001} renderOrder={1}>
+                <sphereGeometry args={[1, 128, 64]} />
+                <meshBasicMaterial {...rgba(theme.scrim)} transparent depthWrite={false} />
+              </mesh>
+              <AnswerDrop texture={painter.lift} color={theme.drop} />
+              <mesh renderOrder={3}>
+                <sphereGeometry args={[1, 128, 64]} />
+                <meshBasicMaterial map={painter.lift} transparent depthTest={false} depthWrite={false} />
+              </mesh>
+            </>
+          )}
         </>
       )}
       <OrbitControls ref={controls} makeDefault enablePan={false} minDistance={MIN_DISTANCE} maxDistance={6} zoomSpeed={0.6} onStart={scaleRotate} onChange={scaleRotate} />
