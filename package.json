@@ -33,7 +33,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.5",
-    "@cloudflare/vite-plugin": "^1.65.0",
+    "@cloudflare/vite-plugin": "^1.66.0",
     "@playwright/test": "^1.64.1",
     "@storybook/addon-a11y": "10.6.5",
     "@storybook/addon-docs": "10.6.5",
