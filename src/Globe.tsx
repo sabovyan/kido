@@ -44,7 +44,11 @@ function paintTexture(canvas: HTMLCanvasElement, world: World, images: (HTMLImag
     const img = images[i];
     if (img) {
       const [[x0, y0], [x1, y1]] = mainBounds(boundsPath, f);
-      ctx.drawImage(img, x0, y0, x1 - x0, y1 - y0);
+      // Repeat the mainland-fitted flag, like the flat map's SVG pattern, so far-off parts (Alaska) get filled too.
+      const pattern = ctx.createPattern(img, 'repeat');
+      pattern?.setTransform(new DOMMatrix().translate(x0, y0).scale((x1 - x0) / img.width, (y1 - y0) / img.height));
+      ctx.fillStyle = pattern ?? token('--map-land');
+      ctx.fill();
     } else {
       ctx.fillStyle = token('--map-land');
       ctx.fill();

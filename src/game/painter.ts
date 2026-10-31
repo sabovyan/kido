@@ -113,7 +113,11 @@ export class GamePainter {
       const img = imgs[i];
       if (img) {
         const [[x0, y0], [x1, y1]] = mainBounds(this.boundsPath, f);
-        ctx.drawImage(img, x0, y0, x1 - x0, y1 - y0);
+        // Repeat the mainland-fitted flag, like the flat board's SVG pattern, so far-off parts (Alaska) get filled too.
+        const pattern = ctx.createPattern(img, 'repeat');
+        pattern?.setTransform(new DOMMatrix().translate(x0, y0).scale((x1 - x0) / img.width, (y1 - y0) / img.height));
+        ctx.fillStyle = pattern ?? colors.blank;
+        ctx.fill();
       } else {
         ctx.fillStyle = mode === 'flag' ? colors.blank : colors[mode];
         ctx.fill();
