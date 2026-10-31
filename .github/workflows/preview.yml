@@ -14,8 +14,8 @@ jobs:
 
   preview:
     needs: checks
-    # Fork PRs don't get secrets.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Fork and Dependabot PRs don't get Actions secrets.
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
