@@ -14,3 +14,7 @@ todos.json
 test-results
 playwright-report
 storybook-static/
+.vitest
+# Visual references are committed for Linux only (see vitest.storybook.config.ts).
+.storybook/__screenshots__/**/*-darwin.png
+.storybook/__screenshots__/**/*-win32.png
