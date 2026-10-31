@@ -17,3 +17,13 @@ jobs:
         run: bunx tsc --noEmit
       - name: Unit tests
         run: bun run test
+      # Runs in the Playwright image the references were made in, so fonts render the same.
+      - name: Visual regression tests
+        run: bun run test:visual:docker
+      - name: Upload screenshot diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-diffs
+          path: .vitest/attachments
+          if-no-files-found: ignore

@@ -9,6 +9,8 @@ import { type BoardScene, loadScene, Screen } from './storyFrames';
 // The world, paints and focus come from each story's loader.
 const meta = {
   title: 'Boards/Globe',
+  // WebGL output differs between machines, so the visual regression tests leave it out.
+  tags: ['no-screenshot'],
   args: { onPick: fn() },
   render: ({ onPick }, { loaded }) => (
     <Screen globe>
